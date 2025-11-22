@@ -380,7 +380,7 @@ def main():
     st.markdown("""
     **📤 How to upload:**
     
-    1. Extract your Twitter archive ZIP file
+    1. Extract your Twitter archive ZIP file received in your email
     2. Unzip the archive to a folder
     3. Open the **data/** folder inside the archive
     4. Click "Browse files" below
