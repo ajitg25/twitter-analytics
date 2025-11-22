@@ -616,6 +616,18 @@ def main():
         
         # Show guide section below upload (when no files uploaded yet)
         guide_section()
+        
+        # Footer with credits and copyright
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style='text-align: center; padding: 20px; color: #666;'>
+                <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+                <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         return
     
     # Silently filter to only the files we need
@@ -626,6 +638,18 @@ def main():
     
     if not filtered_files:
         st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
+        
+        # Footer with credits and copyright
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style='text-align: center; padding: 20px; color: #666;'>
+                <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+                <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         return
     
     # Just show simple success message
@@ -959,6 +983,18 @@ def main():
     #         st.write(f"Total Mutual Connections: {len(mutual_ids)}")
     #         for uid in list(mutual_ids)[:20]:  # Show first 20
     #             st.write(f"- User ID: {uid}")
+    
+    # Footer with credits and copyright
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; padding: 20px; color: #666;'>
+            <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+            <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 if __name__ == "__main__":
     main()

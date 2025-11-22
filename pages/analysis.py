@@ -327,3 +327,15 @@ with col2:
         main_page_path = os.path.relpath("main.py")
         st.switch_page(main_page_path)
 
+# Footer with credits and copyright
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; padding: 20px; color: #666;'>
+        <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+        <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
