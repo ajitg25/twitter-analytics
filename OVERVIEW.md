@@ -87,7 +87,7 @@ python3 advanced_analyzer.py "path/to/archive"
 Beautiful Streamlit dashboard with charts.
 
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 **Features:**
@@ -198,7 +198,7 @@ python3 advanced_analyzer.py "twitter-2025-11-18-753643d946ad97c385806a0b57293cc
 
 ### Option 2: Interactive Dashboard (Best!)
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 # Then enter path in the web UI
 ```
 
@@ -526,7 +526,7 @@ From this project:
 
 **Ready to grow your Twitter presence? Start here:**
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 Good luck! 🚀

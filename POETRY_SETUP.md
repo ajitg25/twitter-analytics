@@ -35,12 +35,12 @@ poetry shell
 
 #### Option A: Interactive Dashboard (Best!)
 ```bash
-poetry run streamlit run dashboard.py
+poetry run streamlit run main.py
 ```
 
 Or if you're in the poetry shell:
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 #### Option B: Advanced CLI Analysis
@@ -63,7 +63,7 @@ poetry install              # Install all dependencies
 poetry shell               # Activate virtual environment
 
 # Run Tools
-streamlit run dashboard.py                    # Web dashboard
+streamlit run main.py                    # Web dashboard
 python advanced_analyzer.py "archive-path"    # CLI analysis
 python exporter.py "archive-path"            # Export data
 python growth_tracker.py                     # Track growth
@@ -103,7 +103,7 @@ After setup, test that everything works:
 poetry run python advanced_analyzer.py "twitter-2025-11-18-753643d946ad97c385806a0b57293cc805c30525ff3f1f515cc2d4bd40112f50"
 
 # Test 2: Launch dashboard
-poetry run streamlit run dashboard.py
+poetry run streamlit run main.py
 ```
 
 ---
@@ -145,7 +145,7 @@ twitter-2025-11-18-753643d946ad97c385806a0b57293cc805c30525ff3f1f515cc2d4bd40112
 Start with the dashboard:
 ```bash
 poetry shell
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 **Have fun analyzing your Twitter data! 🚀**

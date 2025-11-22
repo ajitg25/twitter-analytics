@@ -412,7 +412,7 @@ class AdvancedTwitterAnalytics:
         print("✅ ANALYSIS COMPLETE")
         print("=" * 70)
         print("\nThank you for using Twitter Archive Analytics!")
-        print("For more insights, try the interactive dashboard: streamlit run dashboard.py")
+        print("For more insights, try the interactive dashboard: streamlit run main.py")
         print()
 
 

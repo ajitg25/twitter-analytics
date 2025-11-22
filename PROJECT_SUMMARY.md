@@ -86,7 +86,7 @@ Beautiful Streamlit-based web interface with charts and visualizations.
 
 **Usage**:
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 **Visualizations**:

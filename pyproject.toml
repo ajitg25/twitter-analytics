@@ -30,6 +30,6 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 twitter-analyzer = "analyzer:main"
-twitter-dashboard = "dashboard:main"
+twitter-dashboard = "main:main"
 twitter-export = "exporter:main"
 

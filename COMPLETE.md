@@ -36,7 +36,7 @@ python3 advanced_analyzer.py "archive-path"
 ### 3️⃣ dashboard.py (15KB) ⭐⭐⭐
 Interactive web dashboard with beautiful charts
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 ### 4️⃣ exporter.py (11KB)
@@ -201,7 +201,7 @@ python3 advanced_analyzer.py "twitter-2025-11-18-753643d946ad97c385806a0b57293cc
 
 ### Option 2: Interactive Dashboard (Best!)
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 # Opens in browser automatically
 ```
 
@@ -372,7 +372,7 @@ Total: 100+ KB of code and documentation
 ## 🌟 What You Can Do Next
 
 ### Immediate (Today)
-1. ✅ Run the dashboard: `streamlit run dashboard.py`
+1. ✅ Run the dashboard: `streamlit run main.py`
 2. ✅ Review your exported data in `exports/`
 3. ✅ Read the recommendations
 4. ⬜ Implement first action item
@@ -490,7 +490,7 @@ Everything is ready for you to:
 
 **Start here:**
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 **Good luck growing your Twitter! 🎉**

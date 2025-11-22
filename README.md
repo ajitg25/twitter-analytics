@@ -53,7 +53,7 @@ Enter the path to your Twitter archive folder when prompted.
 Beautiful web-based dashboard with charts and visualizations:
 
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 This will open a browser window with your interactive analytics dashboard.

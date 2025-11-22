@@ -23,7 +23,7 @@ pip3 install -r requirements.txt
 python3 advanced_analyzer.py "twitter-2025-11-18-753643d946ad97c385806a0b57293cc805c30525ff3f1f515cc2d4bd40112f50"
 
 # Or launch the dashboard
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 ## 📂 How to Get Your Twitter Archive
@@ -76,7 +76,7 @@ python3 advanced_analyzer.py "path/to/archive"
 
 ### 3. Web Dashboard
 ```bash
-streamlit run dashboard.py
+streamlit run main.py
 ```
 
 **Output**: Opens in browser with interactive charts
@@ -183,7 +183,7 @@ pip3 install -r requirements.txt
 pip3 install --upgrade streamlit
 
 # Run with specific port
-streamlit run dashboard.py --server.port 8501
+streamlit run main.py --server.port 8501
 ```
 
 ## 📊 Understanding Your Scores

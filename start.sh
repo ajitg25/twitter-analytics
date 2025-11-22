@@ -55,7 +55,7 @@ case $choice in
         echo ""
         echo "Launching Dashboard..."
         echo "Opening in your default browser..."
-        streamlit run dashboard.py
+        streamlit run main.py
         ;;
     *)
         echo "Invalid choice"
