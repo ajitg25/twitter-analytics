@@ -2,6 +2,13 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 import os
+import sys
+
+# Add parent directory to path to import from main
+parent_dir = Path(__file__).parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
 from main import TwitterDashboard, fetch_usernames_from_api
 
 # Page config
