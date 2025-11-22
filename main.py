@@ -380,6 +380,66 @@ def main():
     st.title("🐦 Twitter Analytics Dashboard")
     st.markdown("---")
     
+    # Big, prominent instructions section - expanded by default
+    st.markdown("""
+    <div style='background-color: #1DA1F2; padding: 20px; border-radius: 10px; margin-bottom: 30px;'>
+        <h2 style='color: white; margin: 0;'>📖 First Time? Learn How to Get Your Twitter Archive</h2>
+        <p style='color: white; margin-top: 10px;'>Follow these simple steps to download your Twitter data and start analyzing!</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Step-by-step guide with images
+    st.markdown("### Step 1: Go to Settings")
+    st.markdown("**Click on your profile → Settings and privacy**")
+    st.image("images/step-1.png", caption="Navigate to Settings from your profile menu")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 2: Open Your Account")
+    st.markdown("**Click on 'Your account' in the settings menu**")
+    st.image("images/step-2.png", caption="Select 'Your account' from the settings list")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 3: Request Archive")
+    st.markdown("**Click 'Download an archive of your data'**")
+    st.image("images/step-3.png", caption="Click on 'Download an archive of your data' option")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 4: Verify Your Identity")
+    st.markdown("**Twitter will ask you to verify - click 'Send code'**")
+    st.image("images/step-4.png", caption="Verify your identity by sending a code to your email")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 5: Enter Verification Code")
+    st.markdown("**Check your email and enter the code Twitter sent you**")
+    st.image("images/step-5.png", caption="Enter the verification code from your email")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 6: Wait for Email")
+    st.markdown("**Twitter will email you when your archive is ready (usually takes 24-48 hours)**")
+    st.image("images/step-6.png", caption="You'll receive an email when your archive is ready")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 7: Download & Extract")
+    st.markdown("**Click the download link in the email, then extract the ZIP file**")
+    st.image("images/step-7.png", caption="Download the ZIP file and extract it to a folder")
+    
+    st.markdown("---")
+    
+    st.markdown("### Step 8: Open the Data Folder")
+    st.markdown("**Inside the extracted folder, open the 'data' folder**")
+    st.image("images/step-8.png", caption="Navigate to the 'data' folder inside your extracted archive")
+    
+    st.markdown("---")
+    
+    st.success("✨ **Ready to upload!** Scroll down and upload all files from the data folder below!")
+    st.markdown("---")
+    
     # File upload section
     st.subheader("📂 Upload Your Twitter Archive Data")
     
