@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import os
-from main import TwitterDashboard, fetch_usernames_from_api
+from twitter_utils import TwitterDashboard, fetch_usernames_from_api
 
 # Page config
 st.set_page_config(
@@ -42,9 +41,7 @@ with col2:
     st.write("")  # Spacing
     st.write("")  # Spacing
     if st.button("🔙 Back to Upload Page", use_container_width=True, type="secondary"):
-        # Use os.path.relpath for cross-platform compatibility
-        main_page_path = os.path.relpath("main.py")
-        st.switch_page(main_page_path)
+        st.switch_page("main.py")
 
 st.markdown("---")
 
@@ -53,9 +50,7 @@ if 'twitter_data' not in st.session_state or 'dashboard' not in st.session_state
     st.error("❌ No data found. Please upload your Twitter archive first.")
     st.info("👆 Go back to the main page to upload your data.")
     if st.button("🔙 Go to Upload Page"):
-        # Use os.path.relpath for cross-platform compatibility
-        main_page_path = os.path.relpath("main.py")
-        st.switch_page(main_page_path)
+        st.switch_page("main.py")
     st.stop()
 
 # Get data from session state
@@ -323,9 +318,7 @@ with col2:
             del st.session_state.twitter_data
         if 'dashboard' in st.session_state:
             del st.session_state.dashboard
-        # Use os.path.relpath for cross-platform compatibility
-        main_page_path = os.path.relpath("main.py")
-        st.switch_page(main_page_path)
+        st.switch_page("main.py")
 
 # Footer with credits and copyright
 st.markdown("---")
