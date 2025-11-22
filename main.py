@@ -647,10 +647,8 @@ def main():
             st.balloons()  # Celebration!
             st.success("🎉 **Data loaded successfully! Redirecting to analysis...**")
             
-            # Use os.path.relpath to ensure correct path format across platforms
-            import os
-            analysis_page_path = os.path.relpath("pages/analysis.py")
-            st.switch_page(analysis_page_path)
+            # Use direct path string - Streamlit expects "pages/filename.py"
+            st.switch_page("pages/analysis.py")
             
         except Exception as e:
             st.error(f"❌ Error loading data: {e}")
