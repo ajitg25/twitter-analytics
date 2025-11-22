@@ -5,9 +5,14 @@ import os
 from main import TwitterDashboard, fetch_usernames_from_api
 
 # Page config
-st.set_page_config(page_title="Twitter Analytics - Analysis", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="Twitter Analytics - Analysis", 
+    page_icon="📊", 
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Custom CSS
+# Custom CSS - Hide sidebar completely
 st.markdown("""
     <style>
     .main {
@@ -18,10 +23,30 @@ st.markdown("""
         padding: 10px;
         border-radius: 5px;
     }
+    /* Hide the sidebar */
+    [data-testid="stSidebar"] {
+        display: none !important;
+    }
+    /* Adjust main content to full width */
+    [data-testid="stAppViewContainer"] > div:first-child {
+        width: 100% !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Twitter Analytics Dashboard")
+# Title and back button in same row
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.title("📊 Twitter Analytics Dashboard")
+with col2:
+    st.write("")  # Spacing
+    st.write("")  # Spacing
+    if st.button("🔙 Back to Upload Page", use_container_width=True, type="secondary"):
+        # Use os.path.relpath for cross-platform compatibility
+        main_page_path = os.path.relpath("main.py")
+        st.switch_page(main_page_path)
+
+st.markdown("---")
 
 # Check if data is loaded
 if 'twitter_data' not in st.session_state or 'dashboard' not in st.session_state:

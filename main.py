@@ -518,9 +518,14 @@ def guide_section():
             st.success("✨ **Ready to upload!** Use the upload section above to get started!")
 
 def main():
-    st.set_page_config(page_title="Twitter Analytics Dashboard", page_icon="🐦", layout="wide")
+    st.set_page_config(
+        page_title="Twitter Analytics Dashboard", 
+        page_icon="🐦", 
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
     
-    # Custom CSS
+    # Custom CSS - Hide sidebar completely
     st.markdown("""
         <style>
         .main {
@@ -530,6 +535,14 @@ def main():
             background-color: white;
             padding: 10px;
             border-radius: 5px;
+        }
+        /* Hide the sidebar */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+        /* Adjust main content to full width */
+        [data-testid="stAppViewContainer"] > div:first-child {
+            width: 100% !important;
         }
         </style>
     """, unsafe_allow_html=True)
