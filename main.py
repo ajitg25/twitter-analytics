@@ -637,18 +637,24 @@ def main():
             dashboard = TwitterDashboard(temp_dir)
             data = dashboard.load_all_data()
             st.success(f"🎉 Successfully loaded your Twitter archive!")
+            
+            # Store data in session state for the analysis page
+            st.session_state.twitter_data = data
+            st.session_state.dashboard = dashboard
+            st.session_state.temp_dir = temp_dir
+            
+            # Redirect to analysis page using st.switch_page()
+            st.balloons()  # Celebration!
+            st.success("🎉 **Data loaded successfully! Redirecting to analysis...**")
+            
+            # Use os.path.relpath to ensure correct path format across platforms
+            import os
+            analysis_page_path = os.path.relpath("pages/analysis.py")
+            st.switch_page(analysis_page_path)
+            
         except Exception as e:
             st.error(f"❌ Error loading data: {e}")
             return
-    
-    # Show guide section below upload (for reference, collapsed by default)
-    guide_section()
-    
-    # Display account info
-    if 'account' in data:
-        account = data['account']
-        st.header(f"Welcome, @{account.get('username', 'User')}!")
-        st.caption(f"Account created: {account.get('createdAt', 'N/A')[:10]}")
     
     # ⚡ FOCUS: Follow-Back Analysis Buttons
     st.markdown("### 🎯 Quick Actions")
