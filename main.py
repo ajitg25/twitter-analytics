@@ -667,22 +667,22 @@ def main():
     
     st.markdown("---")
     
-    # Key Metrics
-    st.subheader("📊 Key Metrics")
-    metrics = dashboard.create_engagement_metrics(data)
+    # # Key Metrics
+    # st.subheader("📊 Key Metrics")
+    # metrics = dashboard.create_engagement_metrics(data)
     
-    cols = st.columns(4)
-    cols[0].metric("Followers", metrics['Followers'])
-    cols[1].metric("Following", metrics['Following'])
-    cols[2].metric("Mutual Connections", metrics['Mutual Connections'])
-    cols[3].metric("Engagement Rate", metrics['Engagement Rate'])
+    # cols = st.columns(4)
+    # cols[0].metric("Followers", metrics['Followers'])
+    # cols[1].metric("Following", metrics['Following'])
+    # cols[2].metric("Mutual Connections", metrics['Mutual Connections'])
+    # cols[3].metric("Engagement Rate", metrics['Engagement Rate'])
     
-    cols2 = st.columns(3)
-    cols2[0].metric("Total Tweets", metrics['Total Tweets'])
-    cols2[1].metric("Total Likes", metrics['Total Likes'])
-    cols2[2].metric("Follower Ratio", metrics['Follower Ratio'])
+    # cols2 = st.columns(3)
+    # cols2[0].metric("Total Tweets", metrics['Total Tweets'])
+    # cols2[1].metric("Total Likes", metrics['Total Likes'])
+    # cols2[2].metric("Follower Ratio", metrics['Follower Ratio'])
     
-    st.markdown("---")
+    # st.markdown("---")
     
     # Insights Section
     st.subheader("💡 Insights & Recommendations")
@@ -732,30 +732,30 @@ def main():
     
     st.markdown("---")
     
-    # Detailed Lists
-    with st.expander("📋 View Detailed Lists"):
-        tab1, tab2, tab3 = st.tabs(["Followers", "Following", "Mutual Connections"])
+    # # Detailed Lists
+    # with st.expander("📋 View Detailed Lists"):
+    #     tab1, tab2, tab3 = st.tabs(["Followers", "Following", "Mutual Connections"])
         
-        followers = data.get('followers', [])
-        following = data.get('following', [])
-        follower_ids = {f['follower']['accountId'] for f in followers}
-        following_ids = {f['following']['accountId'] for f in following}
-        mutual_ids = follower_ids & following_ids
+    #     followers = data.get('followers', [])
+    #     following = data.get('following', [])
+    #     follower_ids = {f['follower']['accountId'] for f in followers}
+    #     following_ids = {f['following']['accountId'] for f in following}
+    #     mutual_ids = follower_ids & following_ids
         
-        with tab1:
-            st.write(f"Total Followers: {len(followers)}")
-            for f in followers[:20]:  # Show first 20
-                st.write(f"- User ID: {f['follower']['accountId']}")
+    #     with tab1:
+    #         st.write(f"Total Followers: {len(followers)}")
+    #         for f in followers[:20]:  # Show first 20
+    #             st.write(f"- User ID: {f['follower']['accountId']}")
         
-        with tab2:
-            st.write(f"Total Following: {len(following)}")
-            for f in following[:20]:  # Show first 20
-                st.write(f"- User ID: {f['following']['accountId']}")
+    #     with tab2:
+    #         st.write(f"Total Following: {len(following)}")
+    #         for f in following[:20]:  # Show first 20
+    #             st.write(f"- User ID: {f['following']['accountId']}")
         
-        with tab3:
-            st.write(f"Total Mutual Connections: {len(mutual_ids)}")
-            for uid in list(mutual_ids)[:20]:  # Show first 20
-                st.write(f"- User ID: {uid}")
+    #     with tab3:
+    #         st.write(f"Total Mutual Connections: {len(mutual_ids)}")
+    #         for uid in list(mutual_ids)[:20]:  # Show first 20
+    #             st.write(f"- User ID: {uid}")
 
 
 if __name__ == "__main__":
