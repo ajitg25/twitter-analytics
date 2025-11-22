@@ -546,11 +546,33 @@ def main():
     2. Unzip the archive to a folder
     3. Open the **data/** folder inside the archive
     4. Click "Browse files" below
-    5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
-    6. Click "Browse files" below"
-    7. Select all files from the data folder and click "open"
-    8. Watch this Youtube video for more details: https://youtu.be/PviI7er6MaA
+      5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
+      6. Click "Browse files" below"
+      7. Select all files from the data folder and click "open"
     """)
+    
+    # Embedded YouTube video
+    st.markdown("### 📹 Watch Video Tutorial")
+    st.markdown("**Need help? Watch this step-by-step video guide:**")
+    
+    # Extract video ID from URL
+    video_id = "PviI7er6MaA"  # From https://youtu.be/PviI7er6MaA
+    
+    # Embed YouTube video
+    st.markdown(f"""
+    <div style="text-align: center; margin: 20px 0;">
+        <iframe 
+            width="100%" 
+            height="400" 
+            src="https://www.youtube.com/embed/{video_id}" 
+            title="Twitter Archive Upload Tutorial" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowfullscreen
+            style="border-radius: 10px; max-width: 700px; margin: 0 auto; display: block;">
+        </iframe>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Custom CSS to hide the file list
     st.markdown("""
