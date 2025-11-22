@@ -8,6 +8,69 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import pandas as pd
 import streamlit as st
+import requests
+from urllib.parse import unquote
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Twitter API Configuration from environment
+TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN')
+
+
+def fetch_usernames_from_api(user_ids, bearer_token=None):
+    """Fetch usernames from Twitter API v2"""
+    # Use provided token or fall back to configured token
+    token = bearer_token or TWITTER_BEARER_TOKEN
+    
+    if not token:
+        return {}
+    
+    usernames = {}
+    
+    # Twitter API allows up to 100 user IDs per request
+    batch_size = 100
+    user_id_list = list(user_ids)
+    
+    for i in range(0, len(user_id_list), batch_size):
+        batch = user_id_list[i:i + batch_size]
+        ids_param = ','.join(batch)
+        
+        url = f"https://api.twitter.com/2/users?ids={ids_param}&user.fields=username,name"
+        
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data:
+                    for user in data['data']:
+                        usernames[user['id']] = {
+                            'username': f"@{user['username']}",
+                            'name': user.get('name', '')
+                        }
+            elif response.status_code == 401:
+                st.error("🔑 API Error 401: Invalid Bearer Token. Please regenerate your token in Twitter Developer Portal.")
+                st.info("Go to https://developer.twitter.com/en/portal/dashboard and regenerate your Bearer Token")
+                break
+            elif response.status_code == 429:
+                st.warning("⚠️ Rate limit reached. Showing partial results.")
+                break
+            else:
+                st.error(f"API Error {response.status_code}: {response.text}")
+                break
+                
+        except Exception as e:
+            st.error(f"Error fetching usernames: {str(e)}")
+            break
+    
+    return usernames
 
 
 class TwitterDashboard:
@@ -311,18 +374,66 @@ def main():
     st.title("🐦 Twitter Analytics Dashboard")
     st.markdown("---")
     
-    # File path input
-    default_path = "/Users/ajit.gupta/Desktop/HHpersonal/projects/twitter-analytics/twitter-2025-11-18-753643d946ad97c385806a0b57293cc805c30525ff3f1f515cc2d4bd40112f50"
-    archive_path = st.text_input("Enter Twitter Archive Path:", value=default_path)
+    # File upload section
+    st.subheader("📂 Upload Your Twitter Archive Data")
     
-    if not Path(archive_path).exists():
-        st.error("❌ Invalid path. Please enter a valid Twitter archive folder path.")
+    st.markdown("""
+    **📤 How to upload:**
+    
+    1. Extract your Twitter archive ZIP file
+    2. Unzip the archive to a folder
+    3. Open the **data/** folder inside the archive
+    4. Click "Browse files" below
+    5. Select **ALL files** (Press Cmd/Ctrl + A to select all)
+    6. Click "Open"
+    """)
+    
+    uploaded_files = st.file_uploader(
+        "📂 Browse and select all files from the data/ folder",
+        type=['js'],
+        accept_multiple_files=True,
+        help="Select all files from the data folder - we'll automatically use what's needed"
+    )
+    
+    if not uploaded_files:
+        st.warning("👆 **Please upload files from the data/ folder to get started**")
         return
     
+    # Silently filter to only the files we need
+    needed_files = ['follower.js', 'following.js', 'account.js', 'profile.js', 'tweets.js', 'like.js', 
+                    'block.js', 'mute.js', 'lists-created.js', 'direct-messages.js']
+    
+    filtered_files = [f for f in uploaded_files if f.name in needed_files]
+    
+    if not filtered_files:
+        st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
+        return
+    
+    # Just show success, don't mention filtering
+    st.success(f"✅ Files uploaded successfully!")
+    
+    # Create temporary directory to store uploaded files
+    import tempfile
+    
+    temp_dir = tempfile.mkdtemp()
+    data_dir = Path(temp_dir) / 'data'
+    data_dir.mkdir()
+    
+    # Save only filtered files
+    for uploaded_file in filtered_files:
+        file_path = data_dir / uploaded_file.name
+        with open(file_path, 'wb') as f:
+            f.write(uploaded_file.getbuffer())
+    
     # Load data
-    with st.spinner("Loading your Twitter data..."):
-        dashboard = TwitterDashboard(archive_path)
-        data = dashboard.load_all_data()
+    with st.spinner("🔄 Loading your Twitter data..."):
+        try:
+            dashboard = TwitterDashboard(temp_dir)
+            data = dashboard.load_all_data()
+            st.success(f"🎉 Successfully loaded your Twitter archive!")
+        except Exception as e:
+            st.error(f"❌ Error loading data: {e}")
+            return
     
     # Display account info
     if 'account' in data:
@@ -332,6 +443,7 @@ def main():
     
     # ⚡ FOCUS: Follow-Back Analysis Buttons
     st.markdown("### 🎯 Quick Actions")
+    st.caption("✨ Real @usernames will be fetched automatically from Twitter API")
     
     followers = data.get('followers', [])
     following = data.get('following', [])
@@ -363,11 +475,28 @@ def main():
             # Create dataframe for better display with clickable links
             import pandas as pd
             
+            # Fetch usernames from Twitter API
+            with st.spinner("🔄 Fetching usernames from Twitter API..."):
+                usernames_data = fetch_usernames_from_api(
+                    list(not_followed_back)[:50]
+                )
+            
             accounts_list = []
-            for uid in list(not_followed_back)[:50]:  # Show first 50
+            for idx, uid in enumerate(list(not_followed_back)[:50], 1):  # Show first 50
                 profile_url = f'https://twitter.com/intent/user?user_id={uid}'
+                
+                # Get username from API if available
+                if uid in usernames_data:
+                    username = usernames_data[uid]['username']
+                    display_name = usernames_data[uid]['name']
+                    username_display = f"{username}\n{display_name}" if display_name else username
+                else:
+                    username_display = '👆 Click profile to view'
+                
                 accounts_list.append({
+                    '#': idx,
                     'Account ID': uid,
+                    'Username': username_display,
                     'Profile URL': profile_url
                 })
             
@@ -377,10 +506,14 @@ def main():
             st.dataframe(
                 df,
                 column_config={
-                    "Profile URL": st.column_config.LinkColumn("View Profile", display_text="Open Profile 🔗")
+                    "#": st.column_config.NumberColumn("#", width="small"),
+                    "Account ID": st.column_config.TextColumn("Account ID", width="medium"),
+                    "Username": st.column_config.TextColumn("Username", width="medium", help="Real usernames fetched from Twitter API"),
+                    "Profile URL": st.column_config.LinkColumn("View Profile", display_text="Open Profile 🔗", width="medium")
                 },
                 use_container_width=True,
-                height=400
+                height=400,
+                hide_index=True
             )
             
             st.markdown("---")
@@ -430,11 +563,28 @@ def main():
             # Create dataframe for better display with clickable links
             import pandas as pd
             
+            # Fetch usernames from Twitter API
+            with st.spinner("🔄 Fetching usernames from Twitter API..."):
+                usernames_data = fetch_usernames_from_api(
+                    list(followers_not_following_back)[:50]
+                )
+            
             accounts_list = []
-            for uid in list(followers_not_following_back)[:50]:  # Show first 50
+            for idx, uid in enumerate(list(followers_not_following_back)[:50], 1):  # Show first 50
                 profile_url = f'https://twitter.com/intent/user?user_id={uid}'
+                
+                # Get username from API if available
+                if uid in usernames_data:
+                    username = usernames_data[uid]['username']
+                    display_name = usernames_data[uid]['name']
+                    username_display = f"{username}\n{display_name}" if display_name else username
+                else:
+                    username_display = '👆 Click profile to view'
+                
                 accounts_list.append({
+                    '#': idx,
                     'Account ID': uid,
+                    'Username': username_display,
                     'Profile URL': profile_url
                 })
             
@@ -444,10 +594,14 @@ def main():
             st.dataframe(
                 df,
                 column_config={
-                    "Profile URL": st.column_config.LinkColumn("View Profile", display_text="Open Profile 🔗")
+                    "#": st.column_config.NumberColumn("#", width="small"),
+                    "Account ID": st.column_config.TextColumn("Account ID", width="medium"),
+                    "Username": st.column_config.TextColumn("Username", width="medium", help="Real usernames fetched from Twitter API"),
+                    "Profile URL": st.column_config.LinkColumn("View Profile", display_text="Open Profile 🔗", width="medium")
                 },
                 use_container_width=True,
-                height=400
+                height=400,
+                hide_index=True
             )
             
             st.markdown("---")
