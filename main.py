@@ -318,17 +318,14 @@ def main():
             data = dashboard.load_all_data()
             st.success(f"🎉 Successfully loaded your Twitter archive!")
             
-            # Store data in session state for the analysis page
+            # Store data in session state
             st.session_state.twitter_data = data
             st.session_state.dashboard = dashboard
             st.session_state.temp_dir = temp_dir
             
-            # Redirect to analysis page using st.switch_page()
-            st.balloons()  # Celebration!
-            st.success("🎉 **Data loaded successfully! Redirecting to analysis...**")
-            
-            # Use direct path string - Streamlit expects "pages/filename.py"
-            st.switch_page("pages/analysis.py")
+            # Celebration!
+            st.balloons()
+            st.success("🎉 **Data loaded successfully! See your analysis below...**")
             
         except Exception as e:
             st.error(f"❌ Error loading data: {e}")
