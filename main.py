@@ -381,52 +381,58 @@ def guide_section():
         # Define all steps
         steps = [
             {
-                "title": "Step 1: Go to Settings",
-                "instruction": "**Click on your profile → Settings and privacy**",
+                "title": "Step 1: Go to More",
+                "instructions for mobile": "**Mobile: Click on your profile and go to settings and support**",
                 "image": "images/step-1.png",
-                "caption": "Navigate to Settings from your profile menu"
+                "caption": "Click on More from your profile menu"
             },
             {
-                "title": "Step 2: Open Your Account",
-                "instruction": "**Click on 'Your account' in the settings menu**",
+                "title": "Step 2: Click on settings and privacy",
+                "instructions for mobile": "**Mobile: Click on settings and privacy**",
                 "image": "images/step-2.png",
-                "caption": "Select 'Your account' from the settings list"
+                "caption": "Navigate to settings and privacy from your profile menu"
             },
             {
-                "title": "Step 3: Request Archive",
-                "instruction": "**Click 'Download an archive of your data'**",
+                "title": "Step 3: Click on your account and then Download an archive of your data",
+                "instructions for mobile": "**Mobile: Click on your account and then Download an archive of your data**",
                 "image": "images/step-3.png",
-                "caption": "Click on 'Download an archive of your data' option"
+                "caption": "Click on your account and then Download an archive of your data"
             },
             {
                 "title": "Step 4: Verify Your Identity",
-                "instruction": "**Twitter will ask you to verify - click 'Send code'**",
+                "instructions for mobile": "**Mobile: Twitter will ask you to verify - click 'Send code'**",
                 "image": "images/step-4.png",
                 "caption": "Verify your identity by sending a code to your email"
             },
             {
                 "title": "Step 5: Enter Verification Code",
-                "instruction": "**Check your email and enter the code Twitter sent you**",
+                "instructions for mobile": "**Mobile: Check your email and enter the code Twitter sent you**",
                 "image": "images/step-5.png",
                 "caption": "Enter the verification code from your email"
             },
             {
-                "title": "Step 6: Wait for Email",
-                "instruction": "**Twitter will email you when your archive is ready (usually takes 24-48 hours)**",
+                "title": "Step 6: Wait for Email (this may take 24-48 hours)",
+                "instructions for mobile": "**Mobile: Twitter will email you when your archive is ready and click on the download link**",
                 "image": "images/step-6.png",
-                "caption": "You'll receive an email when your archive is ready"
+                "caption": "You'll receive an email when your archive is ready and click on the download link"
             },
             {
                 "title": "Step 7: Download & Extract",
-                "instruction": "**Click the download link in the email, then extract the ZIP file**",
+                "instructions for mobile": "**Mobile: Unzip the archive to a folder**",
                 "image": "images/step-7.png",
-                "caption": "Download the ZIP file and extract it to a folder"
+                "caption": "Unzip the archive to a folder"
             },
             {
-                "title": "Step 8: Open the Data Folder",
-                "instruction": "**Inside the extracted folder, open the 'data' folder**",
+                "title": "Step 8: Open the data folder (this is the folder that contains all the data you need to upload)",
+                "instructions for mobile": "**Mobile: Open the data folder**",
                 "image": "images/step-8.png",
-                "caption": "Navigate to the 'data' folder inside your extracted archive"
+                "caption": "Open the data folder"
+            },
+            {
+                "title": "Step 9: You are all set to upload your data",
+                "instructions for mobile": "**Mobile: You are all set to upload your data**",
+                "image": "images/step-9.png",
+                "caption": "You are all set to upload your data"
             }
         ]
         
@@ -447,7 +453,7 @@ def guide_section():
         
         # Display current step
         st.markdown(f"### {step_data['title']}")
-        st.markdown(step_data['instruction'])
+        st.markdown(step_data['instructions for mobile'])
         
         # Fixed-size container CSS to prevent window resizing between steps
         st.markdown("""
@@ -540,8 +546,10 @@ def main():
     2. Unzip the archive to a folder
     3. Open the **data/** folder inside the archive
     4. Click "Browse files" below
-    5. Select **ALL files** (Press Cmd/Ctrl + A to select all)
-    6. Click "Open"
+    5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
+    6. Click "Browse files" below"
+    7. Select all files from the data folder and click "open"
+    8. Watch this Youtube video for more details: https://youtu.be/PviI7er6MaA
     """)
     
     # Custom CSS to hide the file list
