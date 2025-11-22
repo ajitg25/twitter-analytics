@@ -10,14 +10,20 @@ import pandas as pd
 import streamlit as st
 import requests
 from urllib.parse import unquote
-from dotenv import load_dotenv
 import os
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except:
+    pass  # In Streamlit Cloud, use secrets instead
 
-# Twitter API Configuration from environment
-TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN')
+# Twitter API Configuration - Try Streamlit secrets first, then env var
+try:
+    TWITTER_BEARER_TOKEN = st.secrets.get("TWITTER_BEARER_TOKEN", os.getenv('TWITTER_BEARER_TOKEN'))
+except:
+    TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN')
 
 
 def fetch_usernames_from_api(user_ids, bearer_token=None):
