@@ -388,15 +388,32 @@ def main():
     6. Click "Open"
     """)
     
+    # Custom CSS to hide the file list
+    st.markdown("""
+        <style>
+        /* Hide the file list/viewer that shows after upload */
+        [data-testid="stFileUploader"] section[data-testid="stFileUploaderDeleteBtn"] {
+            display: none;
+        }
+        [data-testid="stFileUploader"] section > button {
+            display: none;
+        }
+        div[data-testid="stFileUploadDropzone"] {
+            padding: 30px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     uploaded_files = st.file_uploader(
         "📂 Browse and select all files from the data/ folder",
         type=['js'],
         accept_multiple_files=True,
-        help="Select all files from the data folder - we'll automatically use what's needed"
+        help="Select all files from the data folder - we'll automatically use what's needed",
+        label_visibility="visible"
     )
     
     if not uploaded_files:
-        st.warning("👆 **Please upload files from the data/ folder to get started**")
+        st.info("👆 Click 'Browse files' above to get started")
         return
     
     # Silently filter to only the files we need
@@ -409,8 +426,8 @@ def main():
         st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
         return
     
-    # Just show success, don't mention filtering
-    st.success(f"✅ Files uploaded successfully!")
+    # Just show simple success message
+    st.success(f"✅ Archive loaded successfully! Found {len(filtered_files)} data files.")
     
     # Create temporary directory to store uploaded files
     import tempfile
