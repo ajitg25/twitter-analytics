@@ -359,11 +359,173 @@ class TwitterDashboard:
         
         return insights
 
+def guide_section():
+    """Show collapsible guide section"""
+    st.markdown("---")
+    
+    # Eye-catching banner that's always visible
+    st.markdown("""
+        <div style='background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%); padding: 20px 25px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(29, 161, 242, 0.3);'>
+            <h3 style='color: white; margin: 0; font-size: 22px; font-weight: 700;'>📖 First Time? Learn How to Get Your Twitter Archive</h3>
+            <p style='color: white; margin: 10px 0 0 0; font-size: 16px; opacity: 0.95;'>Follow these simple steps to download your Twitter data and start analyzing!</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Collapsible guide section with slide feature
+    with st.expander("👇 **Click here to see step-by-step instructions**", expanded=False):
+        
+        # Initialize step counter in session state
+        if 'current_step' not in st.session_state:
+            st.session_state.current_step = 1
+        
+        # Define all steps
+        steps = [
+            {
+                "title": "Step 1: Go to More",
+                "instructions for mobile": "**Mobile: Click on your profile and go to settings and support**",
+                "image": "images/step-1.png",
+                "caption": "Click on More from your profile menu"
+            },
+            {
+                "title": "Step 2: Click on settings and privacy",
+                "instructions for mobile": "**Mobile: Click on settings and privacy**",
+                "image": "images/step-2.png",
+                "caption": "Navigate to settings and privacy from your profile menu"
+            },
+            {
+                "title": "Step 3: Click on your account and then Download an archive of your data",
+                "instructions for mobile": "**Mobile: Click on your account and then Download an archive of your data**",
+                "image": "images/step-3.png",
+                "caption": "Click on your account and then Download an archive of your data"
+            },
+            {
+                "title": "Step 4: Verify Your Identity",
+                "instructions for mobile": "**Mobile: Twitter will ask you to verify - click 'Send code'**",
+                "image": "images/step-4.png",
+                "caption": "Verify your identity by sending a code to your email"
+            },
+            {
+                "title": "Step 5: Enter Verification Code",
+                "instructions for mobile": "**Mobile: Check your email and enter the code Twitter sent you**",
+                "image": "images/step-5.png",
+                "caption": "Enter the verification code from your email"
+            },
+            {
+                "title": "Step 6: Wait for Email (this may take 24-48 hours)",
+                "instructions for mobile": "**Mobile: Twitter will email you when your archive is ready and click on the download link**",
+                "image": "images/step-6.png",
+                "caption": "You'll receive an email when your archive is ready and click on the download link"
+            },
+            {
+                "title": "Step 7: Download & Extract",
+                "instructions for mobile": "**Mobile: Unzip the archive to a folder**",
+                "image": "images/step-7.png",
+                "caption": "Unzip the archive to a folder"
+            },
+            {
+                "title": "Step 8: Open the data folder (this is the folder that contains all the data you need to upload)",
+                "instructions for mobile": "**Mobile: Open the data folder**",
+                "image": "images/step-8.png",
+                "caption": "Open the data folder"
+            },
+            {
+                "title": "Step 9: You are all set to upload your data",
+                "instructions for mobile": "**Mobile: You are all set to upload your data**",
+                "image": "images/step-9.png",
+                "caption": "You are all set to upload your data"
+            }
+        ]
+        
+        total_steps = len(steps)
+        current_step = st.session_state.current_step
+        
+        # Get current step data
+        step_data = steps[current_step - 1]
+        
+        # Step indicator
+        st.markdown(f"""
+        <div style='text-align: center; margin-bottom: 20px;'>
+            <span style='background-color: #1DA1F2; color: white; padding: 8px 16px; border-radius: 20px; font-weight: 600;'>
+                Step {current_step} of {total_steps}
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display current step
+        st.markdown(f"### {step_data['title']}")
+        st.markdown(step_data['instructions for mobile'])
+        
+        # Fixed-size container CSS to prevent window resizing between steps
+        st.markdown("""
+        <style>
+        /* Fix image container height based on step 1 to prevent layout shift */
+        div[data-testid="stImage"] {
+            min-height: 500px !important;
+            max-height: 500px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        div[data-testid="stImage"] img {
+            max-height: 480px !important;
+            max-width: 100% !important;
+            object-fit: contain !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Display image with fixed container size (centered, fits in window)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.image(step_data['image'], caption=step_data['caption'], use_container_width=True)
+        
+        # Navigation buttons
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+        
+        with col1:
+            if st.button("⏮️ First", disabled=(current_step == 1), use_container_width=True):
+                st.session_state.current_step = 1
+                st.rerun()
+        
+        with col2:
+            if st.button("◀️ Previous", disabled=(current_step == 1), use_container_width=True):
+                st.session_state.current_step -= 1
+                st.rerun()
+        
+        with col4:
+            if st.button("Next ▶️", disabled=(current_step == total_steps), use_container_width=True):
+                st.session_state.current_step += 1
+                st.rerun()
+        
+        with col5:
+            if st.button("Last ⏭️", disabled=(current_step == total_steps), use_container_width=True):
+                st.session_state.current_step = total_steps
+                st.rerun()
+        
+        # Step dots indicator
+        dots_html = '<div style="text-align: center; margin-top: 20px;">'
+        for i in range(1, total_steps + 1):
+            if i == current_step:
+                dots_html += f'<span style="color: #1DA1F2; font-size: 20px; margin: 0 5px;">●</span>'
+            else:
+                dots_html += f'<span style="color: #ccc; font-size: 20px; margin: 0 5px;">○</span>'
+        dots_html += '</div>'
+        st.markdown(dots_html, unsafe_allow_html=True)
+        
+        # Final message on last step
+        if current_step == total_steps:
+            st.markdown("---")
+            st.success("✨ **Ready to upload!** Use the upload section above to get started!")
 
 def main():
-    st.set_page_config(page_title="Twitter Analytics Dashboard", page_icon="🐦", layout="wide")
+    st.set_page_config(
+        page_title="Twitter Analytics Dashboard", 
+        page_icon="🐦", 
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
     
-    # Custom CSS
+    # Custom CSS - Hide sidebar completely
     st.markdown("""
         <style>
         .main {
@@ -374,13 +536,20 @@ def main():
             padding: 10px;
             border-radius: 5px;
         }
+        /* Hide the sidebar */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+        /* Adjust main content to full width */
+        [data-testid="stAppViewContainer"] > div:first-child {
+            width: 100% !important;
+        }
         </style>
     """, unsafe_allow_html=True)
     
     st.title("🐦 Twitter Analytics Dashboard")
-    st.markdown("---")
     
-    # File upload section
+    # File upload section - MAIN FEATURE ON TOP
     st.subheader("📂 Upload Your Twitter Archive Data")
     
     st.markdown("""
@@ -390,9 +559,33 @@ def main():
     2. Unzip the archive to a folder
     3. Open the **data/** folder inside the archive
     4. Click "Browse files" below
-    5. Select **ALL files** (Press Cmd/Ctrl + A to select all)
-    6. Click "Open"
+      5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
+      6. Click "Browse files" below"
+      7. Select all files from the data folder and click "open"
     """)
+    
+    # Embedded YouTube video
+    st.markdown("### 📹 Watch Video Tutorial")
+    st.markdown("**Need help? Watch this step-by-step video guide:**")
+    
+    # Extract video ID from URL
+    video_id = "PviI7er6MaA"  # From https://youtu.be/PviI7er6MaA
+    
+    # Embed YouTube video
+    st.markdown(f"""
+    <div style="text-align: center; margin: 20px 0;">
+        <iframe 
+            width="100%" 
+            height="400" 
+            src="https://www.youtube.com/embed/{video_id}" 
+            title="Twitter Archive Upload Tutorial" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowfullscreen
+            style="border-radius: 10px; max-width: 700px; margin: 0 auto; display: block;">
+        </iframe>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Custom CSS to hide the file list
     st.markdown("""
@@ -420,6 +613,21 @@ def main():
     
     if not uploaded_files:
         st.info("👆 Click 'Browse files' above to get started")
+        
+        # Show guide section below upload (when no files uploaded yet)
+        guide_section()
+        
+        # Footer with credits and copyright
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style='text-align: center; padding: 20px; color: #666;'>
+                <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+                <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         return
     
     # Silently filter to only the files we need
@@ -430,6 +638,18 @@ def main():
     
     if not filtered_files:
         st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
+        
+        # Footer with credits and copyright
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style='text-align: center; padding: 20px; color: #666;'>
+                <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+                <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         return
     
     # Just show simple success message
@@ -454,15 +674,22 @@ def main():
             dashboard = TwitterDashboard(temp_dir)
             data = dashboard.load_all_data()
             st.success(f"🎉 Successfully loaded your Twitter archive!")
+            
+            # Store data in session state for the analysis page
+            st.session_state.twitter_data = data
+            st.session_state.dashboard = dashboard
+            st.session_state.temp_dir = temp_dir
+            
+            # Redirect to analysis page using st.switch_page()
+            st.balloons()  # Celebration!
+            st.success("🎉 **Data loaded successfully! Redirecting to analysis...**")
+            
+            # Use direct path string - Streamlit expects "pages/filename.py"
+            st.switch_page("pages/analysis.py")
+            
         except Exception as e:
             st.error(f"❌ Error loading data: {e}")
             return
-    
-    # Display account info
-    if 'account' in data:
-        account = data['account']
-        st.header(f"Welcome, @{account.get('username', 'User')}!")
-        st.caption(f"Account created: {account.get('createdAt', 'N/A')[:10]}")
     
     # ⚡ FOCUS: Follow-Back Analysis Buttons
     st.markdown("### 🎯 Quick Actions")
@@ -756,7 +983,18 @@ def main():
     #         st.write(f"Total Mutual Connections: {len(mutual_ids)}")
     #         for uid in list(mutual_ids)[:20]:  # Show first 20
     #             st.write(f"- User ID: {uid}")
-
+    
+    # Footer with credits and copyright
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; padding: 20px; color: #666;'>
+            <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
+            <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 if __name__ == "__main__":
     main()
