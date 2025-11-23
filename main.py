@@ -49,6 +49,7 @@ def guide_section():
                 "image": "images/step-4.png",
                 "caption": "Verify your identity by sending a code to your email"
             },
+
             {
                 "title": "Step 5: Enter Verification Code",
                 "instructions for mobile": "**Mobile: Check your email and enter the code Twitter sent you**",
@@ -56,27 +57,33 @@ def guide_section():
                 "caption": "Enter the verification code from your email"
             },
             {
-                "title": "Step 6: Wait for Email (this may take 24-48 hours)",
-                "instructions for mobile": "**Mobile: Twitter will email you when your archive is ready and click on the download link**",
+                "title": "Step 6: Request your archive",
+                "instructions for mobile": "**Mobile: Request your archive from Twitter**",
                 "image": "images/step-6.png",
+                "caption": "Click on the request archive button"
+            },
+            {
+                "title": "Step 7: Wait for Email (this may take 24-48 hours)",
+                "instructions for mobile": "**Mobile: Twitter will email you when your archive is ready and click on the download link**",
+                "image": "images/step-7.png",
                 "caption": "You'll receive an email when your archive is ready and click on the download link"
             },
             {
-                "title": "Step 7: Download & Extract",
+                "title": "Step 8: Download & Extract",
                 "instructions for mobile": "**Mobile: Unzip the archive to a folder**",
-                "image": "images/step-7.png",
+                "image": "images/step-8.png",
                 "caption": "Unzip the archive to a folder"
             },
             {
-                "title": "Step 8: Open the data folder (this is the folder that contains all the data you need to upload)",
+                "title": "Step 9: Open the data folder (this is the folder that contains all the data you need to upload)",
                 "instructions for mobile": "**Mobile: Open the data folder**",
-                "image": "images/step-8.png",
+                "image": "images/step-9.png",
                 "caption": "Open the data folder"
             },
             {
-                "title": "Step 9: You are all set to upload your data",
+                "title": "Step 10: You are all set to upload your data",
                 "instructions for mobile": "**Mobile: You are all set to upload your data**",
-                "image": "images/step-9.png",
+                "image": "images/step-10.png",
                 "caption": "You are all set to upload your data"
             }
         ]
