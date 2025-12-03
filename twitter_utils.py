@@ -442,3 +442,88 @@ class TwitterDashboard:
         
         return fig, total_stats
 
+    def create_posts_replies_chart(self, data, days=365):
+        """Create grouped bar chart for Posts vs Replies"""
+        tweets = data.get('tweets', [])
+        
+        if not tweets:
+            return None
+        
+        # Filter by date
+        cutoff_date = datetime.now().date() - pd.Timedelta(days=days)
+        
+        processed_data = []
+        
+        for tweet_obj in tweets:
+            tweet = tweet_obj.get('tweet', {})
+            created_at = tweet.get('created_at')
+            
+            if created_at:
+                try:
+                    dt = datetime.strptime(created_at, '%a %b %d %H:%M:%S %z %Y')
+                    date = dt.date()
+                    
+                    if date >= cutoff_date:
+                        # Determine type
+                        is_reply = 'in_reply_to_status_id' in tweet or tweet.get('full_text', '').startswith('@')
+                        is_retweet = tweet.get('retweeted', False) or tweet.get('full_text', '').startswith('RT @')
+                        
+                        # We only want original posts vs replies (excluding retweets for this specific chart if desired, 
+                        # or counting non-replies as posts)
+                        if not is_retweet:
+                            type_label = 'Replies' if is_reply else 'Posts'
+                            
+                            processed_data.append({
+                                'Date': date,
+                                'Type': type_label,
+                                'Count': 1
+                            })
+                except:
+                    pass
+        
+        if not processed_data:
+            return None
+            
+        df = pd.DataFrame(processed_data)
+        
+        # Aggregate by Date and Type
+        daily_df = df.groupby(['Date', 'Type']).count().reset_index()
+        
+        # Create grouped bar chart
+        fig = px.bar(daily_df, x='Date', y='Count', color='Type',
+                     barmode='group',
+                     title='Posts vs Replies',
+                     color_discrete_map={'Posts': '#1DA1F2', 'Replies': '#17BF63'})
+        
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#8899a6',
+            title_font_color='white',
+            title_font_size=18,
+            xaxis=dict(
+                showgrid=False,
+                tickformat='%b %d',
+                title=''
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.1)',
+                zeroline=False,
+                title=''
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                title=''
+            ),
+            margin=dict(l=20, r=20, t=40, b=20),
+            height=400,
+            bargap=0.2
+        )
+        
+        return fig
+

@@ -694,13 +694,19 @@ def main():
     else:
         st.info(f"No data available for the selected time range ({selected_range_label}).")
     
-    # Tweet Timeline
-    st.subheader("📈 Tweet Activity Timeline")
-    fig = dashboard.create_tweet_timeline(data)
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
+    # Second Row: Follows over time & Posts vs Replies
+    # col_row2_1, col_row2_2 = st.columns(2)
+    
+    # with col_row2_1:
+    #     st.markdown("### Follows over time")
+    #     st.info("ℹ️ **Data Not Available**\n\nTwitter archive exports do not include timestamps for when followers started following you. This chart cannot be generated from archive data.")
+        
+    # with col_row2_2:
+    posts_replies_fig = dashboard.create_posts_replies_chart(data, days=selected_days)
+    if posts_replies_fig:
+        st.plotly_chart(posts_replies_fig, use_container_width=True)
     else:
-        st.info("No tweet timeline data available.")
+        st.info("No posts or replies found in this time range.")
     
     # Activity Heatmap
     st.subheader("🔥 Activity Heatmap")
