@@ -5,17 +5,23 @@ A powerful analytics tool to extract insights from your Twitter/X data archive. 
 ## ✨ Features
 
 ### 📊 Key Insights
-- **Follower Analysis**: Track followers vs following ratios
-- **Mutual Connections**: Identify who you follow that follows you back
-- **One-sided Follows**: Find accounts that don't follow you back
+- **Follower Management**: 
+  - Identify accounts you follow that don't follow you back
+  - Find "fans" (followers you don't follow back)
+  - **New**: Fetch real-time usernames and display names via Twitter API
+  - **New**: Export lists to CSV or copy profile URLs
+- **Content Analysis**: 
+  - Breakdown of Posts vs Replies
+  - Engagement trends over time
+  - Top performing hashtags
 - **Engagement Metrics**: Calculate your engagement rate and social reach
 
 ### 📈 Visualizations
-- Interactive follower/following pie charts
-- Tweet activity timeline
-- Activity heatmap (day vs hour)
-- Top hashtags analysis
-- Engagement trends over time
+- **Account Overview**: Track Likes, Retweets, and Engagement over time (filterable by date: 7D, 2W, 3M, 1Y, All)
+- **Posts vs Replies**: Compare your original content vs interactions (filterable by date)
+- **Follower Relationships**: Interactive charts for mutual vs one-sided connections
+- **Activity Heatmap**: Visualize your posting habits by day and hour
+- **Top Hashtags**: Bar chart of your most used tags
 
 ### 💡 Smart Recommendations
 - Content strategy suggestions based on your data
@@ -91,7 +97,7 @@ The tool provides insights like:
 - All analysis is done **locally** on your machine
 - No data is sent to external servers
 - Your Twitter archive remains private
-- No API keys or authentication required
+- No API keys or authentication required (except optional public profile fetching)
 
 ## 🛠️ Technical Details
 
@@ -105,7 +111,8 @@ The tool provides insights like:
 ```
 twitter-analytics/
 ├── analyzer.py          # CLI-based analyzer
-├── dashboard.py         # Web-based dashboard
+├── main.py              # Web-based dashboard
+├── twitter_utils.py     # Core processing logic
 ├── requirements.txt     # Python dependencies
 ├── README.md           # Documentation
 └── twitter-YYYY-MM-DD-*/  # Your Twitter archive
@@ -126,20 +133,22 @@ twitter-analytics/
 5. Download the ZIP file and extract it
 6. Use the extracted folder path with this tool
 
+> **Note**: The dashboard includes a built-in step-by-step guide with images and a video tutorial!
+
 ## 🎨 Dashboard Features
 
 ### Interactive Elements
-- **Metrics Cards**: Quick overview of key statistics
-- **Dynamic Charts**: Hover for detailed information
-- **Filtering Options**: Focus on specific time periods
-- **Expandable Sections**: Dive deeper into specific areas
+- **Quick Actions**: Buttons to instantly view non-followers or fans
+- **Smart Filters**: Filter charts by time range (7 days to All time)
+- **Metric Toggles**: Switch between Likes, Retweets, and Engagement views
+- **CSV Exports**: Download lists of users for external management
 
 ### Visualizations
-1. **Follower Relationship Pie Chart**: Visual breakdown of mutual/one-sided follows
-2. **Tweet Timeline**: Activity over time with trend lines
+1. **Account Overview**: Comprehensive line chart of your growth and engagement
+2. **Posts vs Replies**: Donut chart showing your content distribution
 3. **Activity Heatmap**: Best posting times visualization
 4. **Hashtag Bar Chart**: Your most used topics
-5. **Engagement Metrics**: Comprehensive stats dashboard
+5. **Follower Stats**: Detailed breakdown of your network
 
 ## 🤝 Contributing
 
