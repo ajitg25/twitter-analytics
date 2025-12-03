@@ -358,4 +358,87 @@ class TwitterDashboard:
             })
         
         return insights
+    
+    def create_account_overview_chart(self, data, metric='likes', days=365):
+        """Create account overview bar chart with filters"""
+        tweets = data.get('tweets', [])
+        
+        if not tweets:
+            return None, {}
+        
+        # Filter by date
+        cutoff_date = datetime.now().date() - pd.Timedelta(days=days)
+        
+        processed_data = []
+        total_stats = {'tweets': 0, 'likes': 0, 'retweets': 0}
+        
+        for tweet_obj in tweets:
+            tweet = tweet_obj.get('tweet', {})
+            created_at = tweet.get('created_at')
+            
+            if created_at:
+                try:
+                    dt = datetime.strptime(created_at, '%a %b %d %H:%M:%S %z %Y')
+                    date = dt.date()
+                    
+                    if date >= cutoff_date:
+                        likes = int(tweet.get('favorite_count', 0))
+                        retweets = int(tweet.get('retweet_count', 0))
+                        
+                        processed_data.append({
+                            'Date': date,
+                            'Likes': likes,
+                            'Retweets': retweets,
+                            'Total Engagement': likes + retweets
+                        })
+                        
+                        total_stats['tweets'] += 1
+                        total_stats['likes'] += likes
+                        total_stats['retweets'] += retweets
+                except:
+                    pass
+        
+        if not processed_data:
+            return None, total_stats
+            
+        df = pd.DataFrame(processed_data)
+        
+        # Aggregate by date
+        daily_df = df.groupby('Date').sum().reset_index()
+        
+        # Determine y-axis column based on metric
+        y_col = 'Likes'
+        if metric == 'retweets':
+            y_col = 'Retweets'
+        elif metric == 'engagement':
+            y_col = 'Total Engagement'
+            
+        # Create bar chart
+        fig = px.bar(daily_df, x='Date', y=y_col,
+                     title=f'{y_col} Over Time',
+                     labels={'Date': '', y_col: ''})
+        
+        fig.update_traces(marker_color='#1DA1F2', hovertemplate='%{x}<br>%{y}')
+        
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_color='#8899a6',
+            title_font_color='white',
+            title_font_size=18,
+            xaxis=dict(
+                showgrid=False,
+                tickformat='%b %d'
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.1)',
+                zeroline=False
+            ),
+            margin=dict(l=20, r=20, t=40, b=20),
+            height=400,
+            bargap=0.2
+        )
+        
+        return fig, total_stats
 

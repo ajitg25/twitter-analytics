@@ -588,6 +588,112 @@ def main():
         else:
             st.info("No hashtags found in your content.")
     
+    st.markdown("---")
+    
+    # Account Overview Dashboard
+    st.subheader("Account overview")
+    
+    # Filters
+    col_filters1, col_filters2 = st.columns([2, 1])
+    
+    with col_filters1:
+        # Metric selector
+        metric_options = {'Likes': 'likes', 'Retweets': 'retweets', 'Total Engagement': 'engagement'}
+        selected_metric_label = st.radio(
+            "Select Metric", 
+            options=list(metric_options.keys()), 
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        selected_metric = metric_options[selected_metric_label]
+    
+    with col_filters2:
+        # Time range selector
+        time_ranges = {'7D': 7, '2W': 14, '4W': 28, '3M': 90, '1Y': 365, 'All': 3650}
+        selected_range_label = st.select_slider(
+            "Time Range",
+            options=list(time_ranges.keys()),
+            value='1Y',
+            label_visibility="collapsed"
+        )
+        selected_days = time_ranges[selected_range_label]
+    
+    # Generate Chart & Stats
+    overview_fig, overview_stats = dashboard.create_account_overview_chart(
+        data, 
+        metric=selected_metric, 
+        days=selected_days
+    )
+    
+    # Display Stats Cards
+    st.markdown("""
+        <style>
+        .stat-card {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+            border: 1px solid #e1e8ed;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #657786;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #14171a;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    stat_cols = st.columns(4)
+    
+    with stat_cols[0]:
+        st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-label">Total Tweets</div>
+                <div class="stat-value">{overview_stats['tweets']:,}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with stat_cols[1]:
+        st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-label">Total Likes</div>
+                <div class="stat-value">{overview_stats['likes']:,}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with stat_cols[2]:
+        st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-label">Total Retweets</div>
+                <div class="stat-value">{overview_stats['retweets']:,}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with stat_cols[3]:
+        avg_eng = (overview_stats['likes'] + overview_stats['retweets']) / overview_stats['tweets'] if overview_stats['tweets'] > 0 else 0
+        st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-label">Avg Engagement</div>
+                <div class="stat-value">{avg_eng:.1f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Display Chart
+    if overview_fig:
+        st.plotly_chart(overview_fig, use_container_width=True)
+    else:
+        st.info(f"No data available for the selected time range ({selected_range_label}).")
+    
     # Tweet Timeline
     st.subheader("📈 Tweet Activity Timeline")
     fig = dashboard.create_tweet_timeline(data)
