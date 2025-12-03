@@ -261,7 +261,8 @@ class TwitterDashboard:
             x=list(range(24)),
             y=day_order,
             colorscale='Blues',
-            hoverongaps=False
+            hoverongaps=False,
+            hovertemplate='<b>Day:</b> %{y}<br><b>Hour:</b> %{x}:00<br><b>Tweets:</b> %{z}<extra></extra>'
         ))
         
         fig.update_layout(
