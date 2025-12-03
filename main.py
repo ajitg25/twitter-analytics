@@ -199,69 +199,74 @@ def main():
         </style>
     """, unsafe_allow_html=True)
     
-    st.title("🐦 Twitter Analytics Dashboard")
+    # Centered Title
+    st.markdown("<h1 style='text-align: center;'>🐦 Twitter Analytics Dashboard</h1>", unsafe_allow_html=True)
     
     # File upload section - MAIN FEATURE ON TOP
-    st.subheader("📂 Upload Your Twitter Archive Data")
+    # Center the content using columns
+    _, center_col, _ = st.columns([1, 2, 1])
     
-    st.markdown("""
-    **📤 How to upload:**
-    
-    1. Extract your Twitter archive ZIP file received in your email
-    2. Unzip the archive to a folder
-    3. Open the **data/** folder inside the archive
-    4. Click "Browse files" below
-      5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
-      6. Click "Browse files" below"
-      7. Select all files from the data folder and click "open"
-    """)
-    
-    # Embedded YouTube video
-    st.markdown("### 📹 Watch Video Tutorial")
-    st.markdown("**Need help? Watch this step-by-step video guide:**")
-    
-    # Extract video ID from URL
-    video_id = "PviI7er6MaA"  # From https://youtu.be/PviI7er6MaA
-    
-    # Embed YouTube video
-    st.markdown(f"""
-    <div style="text-align: center; margin: 20px 0;">
-        <iframe 
-            width="100%" 
-            height="400" 
-            src="https://www.youtube.com/embed/{video_id}" 
-            title="Twitter Archive Upload Tutorial" 
-            frameborder="0" 
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-            allowfullscreen
-            style="border-radius: 10px; max-width: 700px; margin: 0 auto; display: block;">
-        </iframe>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Custom CSS to hide the file list
-    st.markdown("""
-        <style>
-        /* Hide the file list/viewer that shows after upload */
-        [data-testid="stFileUploader"] section[data-testid="stFileUploaderDeleteBtn"] {
-            display: none;
-        }
-        [data-testid="stFileUploader"] section > button {
-            display: none;
-        }
-        div[data-testid="stFileUploadDropzone"] {
-            padding: 30px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    uploaded_files = st.file_uploader(
-        "📂 Browse and select all files from the data/ folder",
-        type=['js'],
-        accept_multiple_files=True,
-        help="Select all files from the data folder - we'll automatically use what's needed",
-        label_visibility="visible"
-    )
+    with center_col:
+        st.subheader("📂 Upload Your Twitter Archive Data")
+        
+        st.markdown("""
+        **📤 How to upload:**
+        
+        1. Extract your Twitter archive ZIP file received in your email
+        2. Unzip the archive to a folder
+        3. Open the **data/** folder inside the archive
+        4. Click "Browse files" below
+          5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
+          6. Click "Browse files" below"
+          7. Select all files from the data folder and click "open"
+        """)
+        
+        # Embedded YouTube video
+        st.markdown("### 📹 Watch Video Tutorial")
+        st.markdown("**Need help? Watch this step-by-step video guide:**")
+        
+        # Extract video ID from URL
+        video_id = "PviI7er6MaA"  # From https://youtu.be/PviI7er6MaA
+        
+        # Embed YouTube video
+        st.markdown(f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <iframe 
+                width="100%" 
+                height="315" 
+                src="https://www.youtube.com/embed/{video_id}" 
+                title="Twitter Archive Upload Tutorial" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen
+                style="border-radius: 10px; margin: 0 auto; display: block;">
+            </iframe>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Custom CSS to hide the file list
+        st.markdown("""
+            <style>
+            /* Hide the file list/viewer that shows after upload */
+            [data-testid="stFileUploader"] section[data-testid="stFileUploaderDeleteBtn"] {
+                display: none;
+            }
+            [data-testid="stFileUploader"] section > button {
+                display: none;
+            }
+            div[data-testid="stFileUploadDropzone"] {
+                padding: 30px;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        uploaded_files = st.file_uploader(
+            "📂 Browse and select all files from the data/ folder",
+            type=['js'],
+            accept_multiple_files=True,
+            help="Select all files from the data folder - we'll automatically use what's needed",
+            label_visibility="visible"
+        )
     
     if not uploaded_files:
         st.info("👆 Click 'Browse files' above to get started")
