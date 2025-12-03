@@ -331,7 +331,10 @@ def main():
             st.session_state.temp_dir = temp_dir
             
             # Celebration!
-            st.balloons()
+            if 'balloons_shown' not in st.session_state:
+                st.balloons()
+                st.session_state.balloons_shown = True
+                
             st.success("🎉 **Data loaded successfully! See your analysis below...**")
             
         except Exception as e:
