@@ -341,6 +341,17 @@ def main():
             st.error(f"❌ Error loading data: {e}")
             return
     
+    # Display User Greeting
+    account = data.get('account', {})
+    if account:
+        username = account.get('username', '')
+        display_name = account.get('accountDisplayName', '')
+        
+        st.markdown(f"""
+            # 👋 Hello, @{display_name}!
+            ### Welcome to your analytics dashboard, {username}
+        """)
+    
     # ⚡ FOCUS: Follow-Back Analysis Buttons
     st.markdown("### 🎯 Quick Actions")
     st.caption("✨ Real @usernames will be fetched automatically from Twitter API")
