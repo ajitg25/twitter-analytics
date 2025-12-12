@@ -106,9 +106,13 @@ if st.session_state.get('show_not_followed_back', False):
             
             # Get username from API if available
             if uid in usernames_data:
-                username = usernames_data[uid]['username']
-                display_name = usernames_data[uid]['name']
-                username_display = f"{username}\n{display_name}" if display_name else username
+                user_data = usernames_data[uid]
+                username = user_data['username']
+                display_name = user_data['name']
+                is_verified = user_data.get('verified', False)
+                verified_badge = " ☑️" if is_verified else ""
+                
+                username_display = f"{username}\n{display_name}{verified_badge}" if display_name else f"{username}{verified_badge}"
             else:
                 username_display = '👆 Click profile to view'
             
@@ -191,9 +195,13 @@ if st.session_state.get('show_followers_not_following', False):
             
             # Get username from API if available
             if uid in usernames_data:
-                username = usernames_data[uid]['username']
-                display_name = usernames_data[uid]['name']
-                username_display = f"{username}\n{display_name}" if display_name else username
+                user_data = usernames_data[uid]
+                username = user_data['username']
+                display_name = user_data['name']
+                is_verified = user_data.get('verified', False)
+                verified_badge = " ☑️" if is_verified else ""
+                
+                username_display = f"{username}\n{display_name}{verified_badge}" if display_name else f"{username}{verified_badge}"
             else:
                 username_display = '👆 Click profile to view'
             

@@ -44,7 +44,7 @@ def fetch_usernames_from_api(user_ids, bearer_token=None):
         batch = user_id_list[i:i + batch_size]
         ids_param = ','.join(batch)
         
-        url = f"https://api.twitter.com/2/users?ids={ids_param}&user.fields=username,name"
+        url = f"https://api.twitter.com/2/users?ids={ids_param}&user.fields=username,name,verified"
         
         headers = {
             "Authorization": f"Bearer {token}"
@@ -59,7 +59,8 @@ def fetch_usernames_from_api(user_ids, bearer_token=None):
                     for user in data['data']:
                         usernames[user['id']] = {
                             'username': f"@{user['username']}",
-                            'name': user.get('name', '')
+                            'name': user.get('name', ''),
+                            'verified': user.get('verified', False)
                         }
             elif response.status_code == 401:
                 st.error("🔑 API Error 401: Invalid Bearer Token. Please regenerate your token in Twitter Developer Portal.")
