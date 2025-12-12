@@ -260,6 +260,9 @@ def main():
             </style>
         """, unsafe_allow_html=True)
         
+        # Placeholder for demo data alert
+        demo_alert = st.empty()
+        
         uploaded_files = st.file_uploader(
             "📂 Browse and select all files from the data/ folder",
             type=['js'],
@@ -268,83 +271,116 @@ def main():
             label_visibility="visible"
         )
     
+    # Initialize data and dashboard
+    data = None
+    dashboard = None
+
     if not uploaded_files:
-        st.info("👆 Click 'Browse files' above to get started")
+        # Show animated arrow pointing to upload button
+        with demo_alert:
+            st.markdown("""
+                <div style="text-align: center; margin-bottom: 15px; animation: fadeIn 1s;">
+                    <div style="
+                        display: inline-block;
+                        color: #0f1419; 
+                        font-weight: 600; 
+                        margin-bottom: 5px; 
+                        padding: 12px 20px;
+                        background-color: #e8f5fe;
+                        border-radius: 20px;
+                        border: 2px solid #1DA1F2;
+                        box-shadow: 0 4px 6px rgba(29, 161, 242, 0.2);
+                    ">
+                        👀 You are viewing <b>DEMO DATA</b>. Upload your own archive below!
+                    </div>
+                    <div style="
+                        font-size: 40px; 
+                        animation: bounce 1.5s infinite; 
+                        color: #1DA1F2; 
+                        margin-top: -10px;
+                        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        👇
+                    </div>
+                    <style>
+                        @keyframes bounce {
+                            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+                            40% {transform: translateY(10px);}
+                            60% {transform: translateY(5px);}
+                        }
+                        @keyframes fadeIn {
+                            from {opacity: 0; transform: translateY(-10px);}
+                            to {opacity: 1; transform: translateY(0);}
+                        }
+                    </style>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.info("ℹ️ **Viewing Demo Data**: Upload your own Twitter archive above to see your analytics!")
         
-        # Show guide section below upload (when no files uploaded yet)
+        # Show guide section for those who want to know how to get data
         guide_section()
         
-        # Footer with credits and copyright
-        st.markdown("---")
-        st.markdown(
-            """
-            <div style='text-align: center; padding: 20px; color: #666;'>
-                <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
-                <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        return
-    
-    # Silently filter to only the files we need
-    needed_files = ['follower.js', 'following.js', 'account.js', 'profile.js', 'tweets.js', 'like.js', 
-                    'block.js', 'mute.js', 'lists-created.js', 'direct-messages.js']
-    
-    filtered_files = [f for f in uploaded_files if f.name in needed_files]
-    
-    if not filtered_files:
-        st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
-        
-        # Footer with credits and copyright
-        st.markdown("---")
-        st.markdown(
-            """
-            <div style='text-align: center; padding: 20px; color: #666;'>
-                <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
-                <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        return
-    
-    # Just show simple success message
-    st.success(f"✅ Archive loaded successfully! Found {len(filtered_files)} data files.")
-    
-    # Create temporary directory to store uploaded files
-    temp_dir = tempfile.mkdtemp()
-    data_dir = Path(temp_dir) / 'data'
-    data_dir.mkdir()
-    
-    # Save only filtered files
-    for uploaded_file in filtered_files:
-        file_path = data_dir / uploaded_file.name
-        with open(file_path, 'wb') as f:
-            f.write(uploaded_file.getbuffer())
-    
-    # Load data
-    with st.spinner("🔄 Loading your Twitter data..."):
         try:
-            dashboard = TwitterDashboard(temp_dir)
+            # Use current directory where main.py is located
+            current_dir = Path(__file__).parent
+            dashboard = TwitterDashboard(current_dir)
             data = dashboard.load_all_data()
-            st.success(f"🎉 Successfully loaded your Twitter archive!")
-            
-            # Store data in session state
-            st.session_state.twitter_data = data
-            st.session_state.dashboard = dashboard
-            st.session_state.temp_dir = temp_dir
-            
-            # Celebration!
-            if 'balloons_shown' not in st.session_state:
-                st.balloons()
-                st.session_state.balloons_shown = True
-                
-            st.success("🎉 **Data loaded successfully! See your analysis below...**")
             
         except Exception as e:
-            st.error(f"❌ Error loading data: {e}")
+            st.error(f"❌ Error loading demo data: {e}")
             return
+            
+    else:
+        # Silently filter to only the files we need
+        needed_files = ['follower.js', 'following.js', 'account.js', 'profile.js', 'tweets.js', 'like.js', 
+                        'block.js', 'mute.js', 'lists-created.js', 'direct-messages.js']
+        
+        filtered_files = [f for f in uploaded_files if f.name in needed_files]
+        
+        if not filtered_files:
+            st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
+            return
+        
+        # Just show simple success message
+        st.success(f"✅ Archive loaded successfully! Found {len(filtered_files)} data files.")
+        
+        # Create temporary directory to store uploaded files
+        temp_dir = tempfile.mkdtemp()
+        data_dir = Path(temp_dir) / 'data'
+        data_dir.mkdir()
+        
+        # Save only filtered files
+        for uploaded_file in filtered_files:
+            file_path = data_dir / uploaded_file.name
+            with open(file_path, 'wb') as f:
+                f.write(uploaded_file.getbuffer())
+        
+        # Load data
+        with st.spinner("🔄 Loading your Twitter data..."):
+            try:
+                dashboard = TwitterDashboard(temp_dir)
+                data = dashboard.load_all_data()
+                st.success(f"🎉 Successfully loaded your Twitter archive!")
+                
+                # Store data in session state
+                st.session_state.temp_dir = temp_dir
+                
+                # Celebration!
+                if 'balloons_shown' not in st.session_state:
+                    st.balloons()
+                    st.session_state.balloons_shown = True
+                    
+                st.success("🎉 **Data loaded successfully! See your analysis below...**")
+                
+            except Exception as e:
+                st.error(f"❌ Error loading data: {e}")
+                return
+
+    # Store data in session state
+    if data:
+        st.session_state.twitter_data = data
+        st.session_state.dashboard = dashboard
     
     # Display User Greeting
     account = data.get('account', {})
