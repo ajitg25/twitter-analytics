@@ -649,29 +649,33 @@ def main():
     st.subheader("Account overview")
     
     # Filters
+    # Filters
     col_filters1, col_filters2 = st.columns([2, 1])
     
     with col_filters1:
-        # Metric selector
+        # Time range selector - Moved to wider column for better visibility
+        time_ranges = {'7D': 7, '2W': 14, '4W': 28, '3M': 90, '1Y': 365, 'All': 3650}
+        selected_range_label = st.radio(
+            "Time Range",
+            options=list(time_ranges.keys()),
+            index=4,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="time_range"
+        )
+        selected_days = time_ranges[selected_range_label]
+    
+    with col_filters2:
+        # Metric selector - Moved to narrower column
         metric_options = {'Likes': 'likes', 'Retweets': 'retweets', 'Total Engagement': 'engagement'}
         selected_metric_label = st.radio(
             "Select Metric", 
             options=list(metric_options.keys()), 
             horizontal=True,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="metric_select"
         )
         selected_metric = metric_options[selected_metric_label]
-    
-    with col_filters2:
-        # Time range selector
-        time_ranges = {'7D': 7, '2W': 14, '4W': 28, '3M': 90, '1Y': 365, 'All': 3650}
-        selected_range_label = st.select_slider(
-            "Time Range",
-            options=list(time_ranges.keys()),
-            value='1Y',
-            label_visibility="collapsed"
-        )
-        selected_days = time_ranges[selected_range_label]
     
     # Generate Chart & Stats
     overview_fig, overview_stats = dashboard.create_account_overview_chart(
