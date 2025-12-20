@@ -4,6 +4,11 @@ import streamlit as st
 import os
 from database import get_database
 
+# Initialize authentication
+from auth import init_auth_state, handle_oauth_callback
+init_auth_state()
+handle_oauth_callback()
+
 # Page config
 st.set_page_config(
     page_title="Database Health Check", 

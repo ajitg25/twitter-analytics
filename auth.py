@@ -6,6 +6,7 @@ from datetime import datetime
 import requests
 from urllib.parse import urlencode
 import secrets
+from pathlib import Path
 
 # Load environment variables
 try:
@@ -35,6 +36,78 @@ def init_auth_state():
         st.session_state.oauth_state = None
     if 'code_verifier' not in st.session_state:
         st.session_state.code_verifier = None
+    
+    # Try to restore from persistent storage
+    _restore_auth_from_cache()
+
+
+def _get_cache_file():
+    """Get path to auth cache file"""
+    import tempfile
+    cache_dir = Path(tempfile.gettempdir()) / 'twitter_analytics_cache'
+    cache_dir.mkdir(exist_ok=True)
+    return cache_dir / 'auth_cache.json'
+
+
+def _save_auth_to_cache():
+    """Save authentication state to persistent cache"""
+    if st.session_state.get('authenticated') and st.session_state.get('user_info'):
+        try:
+            import json
+            cache_file = _get_cache_file()
+            
+            cache_data = {
+                'authenticated': st.session_state.authenticated,
+                'user_info': st.session_state.user_info,
+                'cached_at': datetime.now().isoformat()
+            }
+            
+            with open(cache_file, 'w') as f:
+                json.dump(cache_data, f)
+        except Exception as e:
+            # Silent fail - caching is optional
+            pass
+
+
+def _restore_auth_from_cache():
+    """Restore authentication state from persistent cache"""
+    try:
+        import json
+        from datetime import timedelta
+        
+        cache_file = _get_cache_file()
+        
+        if not cache_file.exists():
+            return
+        
+        with open(cache_file, 'r') as f:
+            cache_data = json.load(f)
+        
+        # Check if cache is recent (within 24 hours)
+        cached_at = datetime.fromisoformat(cache_data.get('cached_at', ''))
+        if datetime.now() - cached_at > timedelta(hours=24):
+            # Cache expired, delete it
+            cache_file.unlink()
+            return
+        
+        # Restore session state if not already set
+        if not st.session_state.get('authenticated'):
+            st.session_state.authenticated = cache_data.get('authenticated', False)
+            st.session_state.user_info = cache_data.get('user_info')
+            
+    except Exception as e:
+        # Silent fail - if cache is corrupted, just ignore it
+        pass
+
+
+def clear_auth_cache():
+    """Clear persistent authentication cache"""
+    try:
+        cache_file = _get_cache_file()
+        if cache_file.exists():
+            cache_file.unlink()
+    except Exception:
+        pass
 
 
 def generate_pkce_pair():
@@ -212,6 +285,9 @@ def handle_oauth_callback():
                     'authenticated_at': datetime.now().isoformat()
                 }
                 
+                # Save to persistent cache
+                _save_auth_to_cache()
+                
                 # Clear query parameters
                 st.query_params.clear()
                 
@@ -226,6 +302,9 @@ def logout():
     st.session_state.user_info = None
     st.session_state.oauth_state = None
     st.session_state.code_verifier = None
+    
+    # Clear persistent cache
+    clear_auth_cache()
 
 
 def is_authenticated():
