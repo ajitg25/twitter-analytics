@@ -3,6 +3,16 @@ import pandas as pd
 from pathlib import Path
 import tempfile
 from twitter_utils import TwitterDashboard, fetch_usernames_from_api
+from auth import (
+    init_auth_state, 
+    handle_oauth_callback, 
+    is_authenticated, 
+    get_current_user,
+    show_login_button,
+    show_user_profile,
+    logout
+)
+from database import get_database
 
 def guide_section():
     """Show collapsible guide section"""
@@ -177,6 +187,15 @@ def main():
         initial_sidebar_state="collapsed"
     )
     
+    # Initialize authentication state
+    init_auth_state()
+    
+    # Handle OAuth callback
+    handle_oauth_callback()
+    
+    # Initialize database
+    db = get_database()
+    
     # Custom CSS - Hide sidebar completely
     st.markdown("""
         <style>
@@ -196,11 +215,81 @@ def main():
         [data-testid="stAppViewContainer"] > div:first-child {
             width: 100% !important;
         }
+        /* Modal styles */
+        .auth-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .auth-modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
         </style>
     """, unsafe_allow_html=True)
     
-    # Centered Title
-    st.markdown("<h1 style='text-align: center;'>🐦 Twitter Analytics Dashboard</h1>", unsafe_allow_html=True)
+    # Header with user profile or login
+    col1, col2, col3 = st.columns([2, 3, 2])
+    
+    with col1:
+        st.markdown("<h1 style='text-align: left;'>🐦 Twitter Analytics</h1>", unsafe_allow_html=True)
+    
+    with col3:
+        if is_authenticated():
+            user = get_current_user()
+            if user:
+                st.markdown(f"""
+                    <div style="text-align: right; padding: 10px;">
+                        <img src="{user.get('profile_image_url', '')}" 
+                             style="border-radius: 50%; width: 40px; height: 40px; vertical-align: middle;">
+                        <span style="margin-left: 10px; font-weight: 600;">@{user.get('username', '')}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                if st.button("🚪 Logout", key="header_logout"):
+                    logout()
+                    st.rerun()
+        else:
+            # Show Sign In button for unauthenticated users
+            st.markdown("<div style='padding: 5px;'></div>", unsafe_allow_html=True)
+            
+            # Get auth URL
+            from auth import get_twitter_auth_url
+            auth_url = get_twitter_auth_url()
+            
+            if auth_url:
+                st.markdown(f"""
+                    <div style="text-align: right; padding: 10px;">
+                        <a href="{auth_url}" target="_self" style="
+                            background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
+                            color: white;
+                            padding: 10px 20px;
+                            border-radius: 25px;
+                            text-decoration: none;
+                            font-weight: 600;
+                            display: inline-block;
+                            box-shadow: 0 4px 6px rgba(29, 161, 242, 0.3);
+                            transition: all 0.3s ease;
+                        ">
+                            🐦 Sign in with X
+                        </a>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='padding: 20px;'></div>", unsafe_allow_html=True)
+    
+    st.markdown("---")
     
     # File upload section - MAIN FEATURE ON TOP
     # Center the content using columns
@@ -263,13 +352,54 @@ def main():
         # Placeholder for demo data alert
         demo_alert = st.empty()
         
+        # Check authentication before allowing upload
+        if 'show_auth_modal' not in st.session_state:
+            st.session_state.show_auth_modal = False
+        
+        # Show authentication modal if needed
+        if st.session_state.show_auth_modal and not is_authenticated():
+            st.markdown("""
+                <div class="auth-modal">
+                    <div class="auth-modal-content">
+                        <h2 style="color: #1DA1F2; margin-bottom: 20px;">🔐 Sign In Required</h2>
+                        <p style="font-size: 16px; color: #657786; margin-bottom: 30px;">
+                            To upload and analyze your own Twitter data, please sign in with your Twitter/X account.
+                        </p>
+                        <p style="font-size: 14px; color: #657786; margin-bottom: 20px;">
+                            ✨ <b>Premium Features:</b><br>
+                            • Upload your Twitter archive<br>
+                            • Track growth over time<br>
+                            • Save your analytics history<br>
+                            • Access advanced insights
+                        </p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                show_login_button()
+                
+                if st.button("❌ Cancel", use_container_width=True):
+                    st.session_state.show_auth_modal = False
+                    st.rerun()
+            
+            st.stop()
+        
+        # File uploader with authentication check
         uploaded_files = st.file_uploader(
             "📂 Browse and select all files from the data/ folder",
             type=['js'],
             accept_multiple_files=True,
             help="Select all files from the data folder - we'll automatically use what's needed",
-            label_visibility="visible"
+            label_visibility="visible",
+            key="file_uploader"
         )
+        
+        # Check if user tried to upload without authentication
+        if uploaded_files and not is_authenticated():
+            st.session_state.show_auth_modal = True
+            st.rerun()
     
     # Initialize data and dashboard
     data = None
@@ -366,6 +496,28 @@ def main():
                 # Store data in session state
                 st.session_state.temp_dir = temp_dir
                 
+                # Save to database if authenticated
+                if is_authenticated() and db.is_connected():
+                    user = get_current_user()
+                    
+                    with st.spinner("💾 Saving your data to database..."):
+                        # Create/update user in database
+                        db_user = db.create_or_update_user(user)
+                        
+                        if db_user:
+                            user_id = db_user['_id']
+                            
+                            # Save upload metadata
+                            upload_id = db.save_user_upload(user_id, data)
+                            
+                            # Save tweets for growth tracking
+                            tweets_saved = db.save_tweets(user_id, data.get('tweets', []))
+                            
+                            if upload_id:
+                                st.success(f"✅ Data saved to your account! ({tweets_saved} tweets stored for growth tracking)")
+                            else:
+                                st.warning("⚠️ Data loaded but not saved to database")
+                
                 # Celebration!
                 if 'balloons_shown' not in st.session_state:
                     st.balloons()
@@ -392,6 +544,19 @@ def main():
             # 👋 Hello, @{display_name}!
             ### Welcome to your analytics dashboard, {username}
         """)
+    
+    # Show live metrics for authenticated users
+    if is_authenticated():
+        user = get_current_user()
+        
+        st.markdown("---")
+        
+        # Add expander for live metrics
+        with st.expander("📊 **View Live Twitter Metrics** (Last 7 Days)", expanded=False):
+            from twitter_live_api import display_live_metrics
+            display_live_metrics(user)
+        
+        st.markdown("---")
     
     # ⚡ FOCUS: Follow-Back Analysis Buttons
     st.markdown("### 🎯 Quick Actions")
