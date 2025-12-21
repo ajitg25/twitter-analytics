@@ -82,16 +82,12 @@ with col3:
     else:
         auth_url = get_twitter_auth_url()
         if auth_url:
-            st.markdown(f"""
-                <div style="text-align: right; padding: 10px;">
-                    <a href="{auth_url}" target="_self" style="
-                        background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
-                        color: white; padding: 10px 20px; border-radius: 25px;
-                        text-decoration: none; font-weight: 600; display: inline-block;
-                        box-shadow: 0 4px 6px rgba(29, 161, 242, 0.3);
-                    ">🐦 Sign in with X</a>
-                </div>
-            """, unsafe_allow_html=True)
+            # Use official Streamlit link button for better browser compatibility
+            st.markdown('<div style="text-align: right;">', unsafe_allow_html=True)
+            st.link_button("🐦 Sign in with X", auth_url, type="primary")
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.error("🔑 Auth Config Missing")
 
 st.markdown("---")
 
@@ -519,3 +515,13 @@ if col2.button("🚀 Go to Archive Analysis & Upload", type="primary", use_conta
     st.switch_page("pages/archive_analysis.py")
 
 st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0</div>", unsafe_allow_html=True)
+
+# DEBUG SECTION (Bottom of page)
+with st.expander("🛠️ System Config Check (Debug)"):
+    from auth import TWITTER_CLIENT_ID, REDIRECT_URI
+    st.write(f"**Redirect URI:** `{REDIRECT_URI}`")
+    st.write(f"**Client ID Present:** {'✅ Yes' if TWITTER_CLIENT_ID else '❌ No'}")
+    if TWITTER_CLIENT_ID:
+        st.code(f"{TWITTER_CLIENT_ID[:5]}...{TWITTER_CLIENT_ID[-5:]}", language="text")
+    st.info("💡 **Tip**: Ensure the Redirect URI above matches exactly what you have in the Twitter Developer Portal Callback URL.")
+    st.warning("If you see 'Refused to Connect', check that you added the URL to 'User Authentication Settings' in Twitter Portal, NOT just the App settings.")
