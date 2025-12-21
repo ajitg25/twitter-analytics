@@ -531,4 +531,4 @@ _, col2, _ = st.columns([1, 2, 1])
 if col2.button("🚀 Go to Archive Analysis & Upload", type="primary", use_container_width=True):
     st.switch_page("pages/archive_analysis.py")
 
-st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0</div>", unsafe_allow_html=True)
+st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0 <br> Made with ❤️ by @unfiltered_ajit</div>", unsafe_allow_html=True)

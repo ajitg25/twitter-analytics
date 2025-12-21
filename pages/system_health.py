@@ -78,3 +78,5 @@ st.markdown("---")
 
 if st.button("⬅️ Back to Dashboard"):
     st.switch_page("main.py")
+
+st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0 <br> Made with ❤️ by @unfiltered_ajit</div>", unsafe_allow_html=True)

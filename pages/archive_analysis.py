@@ -793,12 +793,4 @@ st.markdown("---")
 
 # Footer with credits and copyright
 st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; padding: 20px; color: #666;'>
-        <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
-        <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0 <br> Made with ❤️ by @unfiltered_ajit</div>", unsafe_allow_html=True)

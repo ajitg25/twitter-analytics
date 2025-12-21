@@ -187,3 +187,5 @@ After updating `.env`, restart your Streamlit app for changes to take effect.
 # Back button
 if st.button("🔙 Back to Main App"):
     st.switch_page("main.py")
+
+st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0 <br> Made with ❤️ by @unfiltered_ajit</div>", unsafe_allow_html=True)
