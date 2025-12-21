@@ -205,9 +205,10 @@ class TwitterLiveAPI:
                         flat_tweets.append(item)
                         
                     df = pd.DataFrame(flat_tweets)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = export_dir / f"tweets_export_{user_id}_{timestamp}.csv"
-                    df.to_csv(filename, index=False)
+                    if APP_ENV=="development":
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = export_dir / f"tweets_export_{user_id}_{timestamp}.csv"
+                        df.to_csv(filename, index=False)
                     st.sidebar.info(f"📁 Local CSV Exported: {filename.name}")
                 except Exception as export_error:
                     print(f"CSV Export Exception: {export_error}")
