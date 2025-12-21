@@ -499,24 +499,7 @@ if is_authenticated():
 
 else:
     # Not authenticated landing
-    auth_url = get_twitter_auth_url()
-    
-    if auth_url:
-        st.info("👋 Please sign in to see your live Twitter stats instantly!")
-        st.markdown(f"""
-            <div style="text-align: center; padding: 20px;">
-                <a href="{auth_url}" target="_self" style="
-                    background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
-                    color: white; padding: 15px 40px; border-radius: 30px;
-                    text-decoration: none; font-weight: 700; font-size: 18px;
-                    display: inline-block; box-shadow: 0 6px 12px rgba(29, 161, 242, 0.4);
-                    transition: all 0.3s ease;
-                ">🐦 Sign in with X (Twitter)</a>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.error("⚠️ **Configuration Missing**: `TWITTER_CLIENT_ID` not found.")
-        st.info("💡 **Fix**: Go to your Streamlit Cloud dashboard -> Settings -> Secrets and add your Twitter API keys.")
+    st.info("👋 Sign in above to see your live Twitter stats instantly!")
 
     st.markdown("""
     ### ✨ What you get:
