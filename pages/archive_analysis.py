@@ -198,26 +198,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header
-col1, col2, col3 = st.columns([2, 2, 1])
+col1, col2, col3 = st.columns([1, 2, 1])
+
 with col1:
-    st.title("📁 Twitter Archive Analysis")
-with col2:
     if st.button("🏠 Back to Live Analytics", key="back_to_main"):
         st.switch_page("main.py")
+
+with col2:
+    st.markdown("<h1 style='text-align: center;'>📁 Twitter Archive Analysis</h1>", unsafe_allow_html=True)
+
 with col3:
     if is_authenticated():
         user = get_current_user()
         if user:
+            # Profile Info
             st.markdown(f"""
-                <div style="text-align: right; padding: 10px;">
+                <div style="text-align: right; margin-bottom: 5px;">
                     <img src="{user.get('profile_image_url', '')}" 
-                         style="border-radius: 50%; width: 35px; height: 35px; vertical-align: middle;">
-                    <span style="margin-left: 8px; font-size: 14px;">@{user.get('username', '')}</span>
+                         style="border-radius: 50%; width: 35px; height: 35px; vertical-align: middle; border: 2px solid #1DA1F2;">
+                    <span style="margin-left: 8px; font-weight: 600; font-size: 14px;">@{user.get('username', '')}</span>
                 </div>
             """, unsafe_allow_html=True)
-            if st.button("🚪 Logout", key="analysis_logout"):
-                logout()
-                st.switch_page("main.py")
+            
+            # Logout Button (Right Aligned)
+            c_spacer, c_btn = st.columns([1, 1.2]) # Adjusted ratio for better fit in the col3
+            with c_btn:
+                if st.button("🚪 Logout", key="analysis_logout", use_container_width=True):
+                    logout()
+                    st.switch_page("main.py")
 
 st.markdown("---")
 

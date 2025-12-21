@@ -205,6 +205,40 @@ def exchange_code_for_token(code):
         return None
 
 
+def refresh_access_token(refresh_token):
+    """Refresh access token using refresh token"""
+    if not TWITTER_CLIENT_ID or not TWITTER_CLIENT_SECRET:
+        return None
+    
+    # Token request
+    data = {
+        'grant_type': 'refresh_token',
+        'refresh_token': refresh_token,
+        'client_id': TWITTER_CLIENT_ID
+    }
+    
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    
+    try:
+        response = requests.post(
+            TWITTER_TOKEN_URL,
+            data=data,
+            headers=headers,
+            auth=(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET)
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Token refresh failed: {response.text}")
+            return None
+    except Exception as e:
+        print(f"Error refreshing token: {e}")
+        return None
+
+
 def get_user_info(access_token):
     """Fetch user information from Twitter API"""
     headers = {
@@ -261,6 +295,9 @@ def handle_oauth_callback():
             st.error(f"Failed to decode state: {e}")
             return False
         
+        # Clear query parameters immediately after extraction to prevent re-processing on rerun
+        st.query_params.clear()
+        
         # Exchange code for token
         token_data = exchange_code_for_token(code)
         
@@ -288,10 +325,21 @@ def handle_oauth_callback():
                 # Save to persistent cache
                 _save_auth_to_cache()
                 
-                # Clear query parameters
-                st.query_params.clear()
+                # Save to Database (MongoDB)
+                try:
+                    from database import get_database
+                    db = get_database()
+                    if db.is_connected():
+                        db.create_or_update_user(st.session_state.user_info)
+                except Exception as e:
+                    print(f"DB Save Error: {e}")
                 
                 return True
+            else:
+                # If get_user_info failed (likely 429)
+                st.error("📉 Failed to fetch your Twitter profile. This usually means the API Rate Limit was hit. Please wait 15 minutes and try again.")
+        else:
+            st.error("🚫 Authentication failed during token exchange. The link may have expired.")
     
     return False
 

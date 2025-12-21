@@ -1,29 +1,92 @@
 """Twitter Live API - Fetch real-time data using OAuth access token"""
 
 import requests
+import os
 from datetime import datetime, timedelta
 import streamlit as st
+from database import get_database
 
 
 class TwitterLiveAPI:
     """Fetch live Twitter data using OAuth 2.0 access token"""
     
-    def __init__(self, access_token):
+    def __init__(self, access_token, refresh_token=None):
         self.access_token = access_token
+        self.refresh_token = refresh_token
         self.base_url = "https://api.twitter.com/2"
         self.headers = {
             'Authorization': f'Bearer {access_token}'
         }
-    
+        # Check environment
+        self.env = os.getenv('APP_ENV', 'production').lower()
+
+    def _refresh_token(self):
+        """Internal helper to refresh the access token"""
+        if not self.refresh_token:
+            return False
+            
+        try:
+            from auth import refresh_access_token
+            new_tokens = refresh_access_token(self.refresh_token)
+            
+            if new_tokens:
+                self.access_token = new_tokens.get('access_token')
+                self.refresh_token = new_tokens.get('refresh_token', self.refresh_token)
+                self.headers['Authorization'] = f'Bearer {self.access_token}'
+                
+                # Update session state
+                if 'user_info' in st.session_state:
+                    st.session_state.user_info['access_token'] = self.access_token
+                    st.session_state.user_info['refresh_token'] = self.refresh_token
+                
+                # Update DB
+                from database import get_database
+                db = get_database()
+                if db.is_connected() and 'user_info' in st.session_state:
+                    db.create_or_update_user(st.session_state.user_info)
+                
+                return True
+        except Exception as e:
+            print(f"Token Refresh Exception: {e}")
+        return False
+
     def get_my_user_id(self):
-        """Get the authenticated user's Twitter ID"""
+        """Get the authenticated user's Twitter ID - Cache First"""
+        # 1. Check Session Cache
+        if 'live_user_id_cache' in st.session_state:
+            return st.session_state.live_user_id_cache
+            
+        # 2. Check user_info from auth if available
+        if 'user_info' in st.session_state and st.session_state.user_info.get('id'):
+            return st.session_state.user_info.get('id')
+
+        if self.env == 'development':
+            return "1234567890"
+
+        # 3. Last Resort: hit API
         url = f"{self.base_url}/users/me"
         params = {'user.fields': 'id,username,name'}
         
         try:
             response = requests.get(url, headers=self.headers, params=params)
+            
+            # Handle expired token (401)
+            if response.status_code == 401:
+                if self._refresh_token():
+                    # Retry once with new token
+                    response = requests.get(url, headers=self.headers, params=params)
+                else:
+                    st.error("🔑 Session expired. Please log in again.")
+                    return None
+
             if response.status_code == 200:
-                return response.json().get('data', {}).get('id')
+                user_id = response.json().get('data', {}).get('id')
+                if user_id:
+                    st.session_state.live_user_id_cache = user_id
+                return user_id
+            elif response.status_code == 429:
+                st.error("🔑 Rate limit reached for User Identity. Try again in 15 mins.")
+                return None
             else:
                 st.error(f"Failed to get user ID: {response.text}")
                 return None
@@ -31,19 +94,45 @@ class TwitterLiveAPI:
             st.error(f"Error getting user ID: {e}")
             return None
     
-    def get_recent_tweets(self, user_id, max_results=10):
+    def get_recent_tweets(self, user_id, max_results=10, force_refresh=False):
         """
-        Get user's recent tweets
-        
-        Args:
-            user_id: Twitter user ID
-            max_results: Number of tweets to fetch (5-100)
-        
-        Returns:
-            List of tweet objects with metrics
+        Get user's recent tweets - Cache First
         """
+        if self.env == 'development':
+            # ... (mock logic preserved) ...
+            import random
+            from datetime import timedelta
+            mock_tweets = []
+            now = datetime.now()
+            for i in range(max_results):
+                created_at = now - timedelta(hours=i*5)
+                mock_tweets.append({
+                    'id': f'tweet_{i}',
+                    'text': f"This is a mock tweet number {i+1} for development purposes. #DevMode #MockData",
+                    'created_at': created_at.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                    'author_id': user_id,
+                    'public_metrics': {
+                        'impression_count': random.randint(100, 5000), 'like_count': random.randint(10, 500),
+                        'retweet_count': random.randint(0, 100), 'reply_count': random.randint(0, 50),
+                        'quote_count': random.randint(0, 20)
+                    }
+                })
+            return mock_tweets
+
+        # PRODUCTION LOGIC - Cache First
+        db = get_database()
+        
+        # 1. Check if we have recent data in DB (less than 15 mins old)
+        if not force_refresh and db.is_connected():
+            age = db.get_cache_age(user_id, 'recent_tweets')
+            if age < 15: # 15 minutes TTL
+                cached = db.get_saved_tweets(user_id, limit=max_results)
+                if cached:
+                    st.caption(f"💾 Using database data (Checked {int(age)}m ago)")
+                    return cached
+
+        # 2. If no fresh cache, hit API
         url = f"{self.base_url}/users/{user_id}/tweets"
-        
         params = {
             'max_results': min(max_results, 100),
             'tweet.fields': 'created_at,public_metrics,text,author_id',
@@ -54,58 +143,78 @@ class TwitterLiveAPI:
         try:
             response = requests.get(url, headers=self.headers, params=params)
             
+            # Handle expired token (401)
+            if response.status_code == 401:
+                if self._refresh_token():
+                    # Retry once with new token
+                    response = requests.get(url, headers=self.headers, params=params)
+                else:
+                    return db.get_saved_tweets(user_id, limit=max_results) if db.is_connected() else []
+
             if response.status_code == 200:
-                data = response.json()
-                return data.get('data', [])
-            elif response.status_code == 401:
-                st.error("🔑 Access token expired or invalid. Please sign in again.")
-                return []
+                tweets = response.json().get('data', [])
+                if tweets:
+                    # 1. Save to Database
+                    if db.is_connected():
+                         db.save_live_tweets(user_id, tweets)
+                         db.save_live_api_response(user_id, 'recent_tweets', {'count': len(tweets)})
+                    
+                    # 2. Export to Local CSV for Manual Analysis
+                    try:
+                        import pandas as pd
+                        from pathlib import Path
+                        
+                        # Create exports directory if it doesn't exist
+                        export_dir = Path("exports")
+                        export_dir.mkdir(exist_ok=True)
+                        
+                        # Flatten metrics for CSV compatibility
+                        flat_tweets = []
+                        for t in tweets:
+                            item = t.copy()
+                            metrics = item.pop('public_metrics', {})
+                            for k, v in metrics.items():
+                                item[f'metric_{k}'] = v
+                            flat_tweets.append(item)
+                            
+                        df = pd.DataFrame(flat_tweets)
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = export_dir / f"tweets_export_{user_id}_{timestamp}.csv"
+                        df.to_csv(filename, index=False)
+                        st.sidebar.info(f"📁 Local CSV Exported: {filename}")
+                    except Exception as export_error:
+                        print(f"CSV Export Exception: {export_error}")
+
+                return tweets
             elif response.status_code == 429:
-                st.warning("⚠️ Rate limit reached. Please try again later.")
+                st.warning("⚠️ Rate limit reached. Using database fallback.")
+                if db.is_connected():
+                    return db.get_saved_tweets(user_id, limit=max_results)
                 return []
             else:
                 st.error(f"Failed to fetch tweets: {response.text}")
-                return []
+                return db.get_saved_tweets(user_id, limit=max_results) if db.is_connected() else []
                 
         except Exception as e:
             st.error(f"Error fetching tweets: {e}")
-            return []
-    
+            return db.get_saved_tweets(user_id, limit=max_results) if db.is_connected() else []
+
     def get_tweet_metrics_summary(self, tweets):
         """
-        Calculate summary metrics from tweets
-        
-        Args:
-            tweets: List of tweet objects
-        
-        Returns:
-            Dictionary with summary metrics
+        Calculate summary metrics from tweets (Logic is identical for real/mock)
         """
         if not tweets:
             return {
-                'total_tweets': 0,
-                'total_impressions': 0,
-                'total_likes': 0,
-                'total_retweets': 0,
-                'total_replies': 0,
-                'total_quotes': 0,
-                'avg_impressions': 0,
-                'avg_engagement_rate': 0
+                'total_tweets': 0, 'total_impressions': 0, 'total_likes': 0,
+                'total_retweets': 0, 'total_replies': 0, 'total_quotes': 0,
+                'avg_impressions': 0, 'avg_engagement_rate': 0
             }
         
-        total_impressions = 0
-        total_likes = 0
-        total_retweets = 0
-        total_replies = 0
-        total_quotes = 0
-        
-        for tweet in tweets:
-            metrics = tweet.get('public_metrics', {})
-            total_impressions += metrics.get('impression_count', 0)
-            total_likes += metrics.get('like_count', 0)
-            total_retweets += metrics.get('retweet_count', 0)
-            total_replies += metrics.get('reply_count', 0)
-            total_quotes += metrics.get('quote_count', 0)
+        total_impressions = sum(t.get('public_metrics', {}).get('impression_count', 0) for t in tweets)
+        total_likes = sum(t.get('public_metrics', {}).get('like_count', 0) for t in tweets)
+        total_retweets = sum(t.get('public_metrics', {}).get('retweet_count', 0) for t in tweets)
+        total_replies = sum(t.get('public_metrics', {}).get('reply_count', 0) for t in tweets)
+        total_quotes = sum(t.get('public_metrics', {}).get('quote_count', 0) for t in tweets)
         
         total_engagements = total_likes + total_retweets + total_replies + total_quotes
         avg_engagement_rate = (total_engagements / total_impressions * 100) if total_impressions > 0 else 0
@@ -122,40 +231,25 @@ class TwitterLiveAPI:
         }
     
     def get_weekly_performance(self):
-        """
-        Get performance metrics for the last 7 days
-        
-        Returns:
-            Dictionary with weekly metrics
-        """
+        """Get performance metrics for the last 7 days"""
         user_id = self.get_my_user_id()
         if not user_id:
             return None
-        
-        # Fetch recent tweets (up to 100)
+            
         tweets = self.get_recent_tweets(user_id, max_results=100)
         
         if not tweets:
-            return {
-                'period': 'Last 7 days',
-                'tweets_count': 0,
-                'total_impressions': 0,
-                'total_engagement': 0,
-                'avg_engagement_rate': 0
-            }
-        
-        # Filter tweets from last 7 days
+             return None
+
+        # Logic is shared, just reusing the fetched tweets
         seven_days_ago = datetime.now() - timedelta(days=7)
         recent_tweets = []
-        
         for tweet in tweets:
             created_at = datetime.strptime(tweet['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
             if created_at >= seven_days_ago:
                 recent_tweets.append(tweet)
         
-        # Calculate metrics
         metrics = self.get_tweet_metrics_summary(recent_tweets)
-        
         return {
             'period': 'Last 7 days',
             'tweets_count': metrics['total_tweets'],
@@ -170,27 +264,180 @@ class TwitterLiveAPI:
                 'quotes': metrics['total_quotes']
             }
         }
-    
+
     def get_top_performing_tweet(self, tweets):
-        """
-        Find the top performing tweet by engagement
-        
-        Args:
-            tweets: List of tweet objects
-        
-        Returns:
-            Top performing tweet object
-        """
-        if not tweets:
-            return None
-        
-        top_tweet = max(tweets, key=lambda t: (
+        if not tweets: return None
+        return max(tweets, key=lambda t: (
             t.get('public_metrics', {}).get('like_count', 0) +
             t.get('public_metrics', {}).get('retweet_count', 0) +
             t.get('public_metrics', {}).get('reply_count', 0)
         ))
+
+    def get_followers(self, user_id, max_results=100, pagination_token=None, force_refresh=False):
+        """Get user's followers - Cache First"""
+        if self.env == 'development':
+            import random
+            from datetime import timedelta
+            
+            mock_users = []
+            now = datetime.now()
+            for i in range(20):
+                mock_users.append({
+                    'id': f'follower_{i}',
+                    'username': f'mock_follower_{i}',
+                    'name': f'Fan Number {i}',
+                    'created_at': (now - timedelta(days=i*10)).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                    'public_metrics': {
+                        'followers_count': random.randint(100, 10000),
+                        'following_count': random.randint(100, 5000),
+                        'tweet_count': random.randint(50, 2000),
+                        'listed_count': random.randint(0, 50)
+                    },
+                    'verified': random.choice([True, False])
+                })
+            return {'data': mock_users, 'meta': {'result_count': 20}}
+
+        # PRODUCTION LOGIC - Cache First
+        db = get_database()
         
-        return top_tweet
+        if not force_refresh and not pagination_token and db.is_connected():
+            age = db.get_cache_age(user_id, 'followers')
+            if age < 60: # 60 minutes TTL
+                cached = db.get_saved_connections(user_id, 'followers')
+                if cached:
+                    st.caption(f"👥 Using database followers (Checked {int(age)}m ago)")
+                    return {'data': cached, 'meta': {'result_count': len(cached)}}
+
+        url = f"{self.base_url}/users/{user_id}/followers"
+        
+        params = {
+            'max_results': min(max_results, 1000),
+            'user.fields': 'created_at,description,profile_image_url,public_metrics,verified'
+        }
+        
+        if pagination_token:
+            params['pagination_token'] = pagination_token
+            
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            
+            # Handle expired token (401)
+            if response.status_code == 401:
+                if self._refresh_token():
+                    # Retry once with new token
+                    response = requests.get(url, headers=self.headers, params=params)
+                else:
+                    return db.get_saved_connections(user_id, 'followers') if db.is_connected() else None
+
+            if response.status_code == 200:
+                json_res = response.json()
+                # Save Incremental
+                if db.is_connected() and 'data' in json_res and not pagination_token:
+                    db.save_live_connections(user_id, json_res['data'], 'followers')
+                    # Update metadata for cache-age tracking
+                    db.save_live_api_response(user_id, 'followers', {'count': len(json_res['data'])})
+                return json_res
+            elif response.status_code == 429:
+                st.warning("⚠️ Rate limit reached for followers. Checking history...")
+                if db.is_connected():
+                    cached = db.get_saved_connections(user_id, 'followers')
+                    if cached:
+                         st.info(f"📦 Loaded {len(cached)} followers from database.")
+                         return {'data': cached, 'meta': {'result_count': len(cached)}}
+                return None
+            else:
+                st.error(f"Failed to fetch followers: {response.text}")
+                return db.get_saved_connections(user_id, 'followers') if db.is_connected() else None
+        except Exception as e:
+            st.error(f"Error fetching followers: {e}")
+            if db.is_connected():
+                cached = db.get_saved_connections(user_id, 'followers')
+                if cached:
+                        return {'data': cached, 'meta': {'result_count': len(cached)}}
+            return None
+
+    def get_following(self, user_id, max_results=100, pagination_token=None, force_refresh=False):
+        """Get accounts the user is following - Cache First"""
+        if self.env == 'development':
+            import random
+            from datetime import timedelta
+            
+            mock_users = []
+            now = datetime.now()
+            for i in range(15): # Mock 15 following
+                mock_users.append({
+                    'id': f'following_{i}',
+                    'username': f'tech_guru_{i}',
+                    'name': f'Tech Influencer {i}',
+                    'created_at': (now - timedelta(days=i*20)).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                    'public_metrics': {
+                        'followers_count': random.randint(5000, 500000),
+                        'following_count': random.randint(100, 1000),
+                        'tweet_count': random.randint(1000, 20000),
+                        'listed_count': random.randint(50, 500)
+                    },
+                    'verified': True
+                })
+            return {'data': mock_users, 'meta': {'result_count': 15}}
+
+        # PRODUCTION LOGIC - Cache First
+        db = get_database()
+        
+        if not force_refresh and not pagination_token and db.is_connected():
+            age = db.get_cache_age(user_id, 'following')
+            if age < 60: # 60 minutes TTL
+                cached = db.get_saved_connections(user_id, 'following')
+                if cached:
+                    st.caption(f"👥 Using database following (Checked {int(age)}m ago)")
+                    return {'data': cached, 'meta': {'result_count': len(cached)}}
+
+        url = f"{self.base_url}/users/{user_id}/following"
+        
+        params = {
+            'max_results': min(max_results, 1000),
+            'user.fields': 'created_at,description,profile_image_url,public_metrics,verified'
+        }
+        
+        if pagination_token:
+            params['pagination_token'] = pagination_token
+            
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            
+            # Handle expired token (401)
+            if response.status_code == 401:
+                if self._refresh_token():
+                    # Retry once with new token
+                    response = requests.get(url, headers=self.headers, params=params)
+                else:
+                    return db.get_saved_connections(user_id, 'following') if db.is_connected() else None
+
+            if response.status_code == 200:
+                json_res = response.json()
+                # Save Incremental
+                if db.is_connected() and 'data' in json_res and not pagination_token:
+                    db.save_live_connections(user_id, json_res['data'], 'following')
+                    # Update metadata for cache-age tracking
+                    db.save_live_api_response(user_id, 'following', {'count': len(json_res['data'])})
+                return json_res
+            elif response.status_code == 429:
+                st.warning("⚠️ Rate limit reached for following. Checking history...")
+                if db.is_connected():
+                    cached = db.get_saved_connections(user_id, 'following')
+                    if cached:
+                         st.info(f"📦 Loaded {len(cached)} following from database.")
+                         return {'data': cached, 'meta': {'result_count': len(cached)}}
+                return None
+            else:
+                st.error(f"Failed to fetch following: {response.text}")
+                return db.get_saved_connections(user_id, 'following') if db.is_connected() else None
+        except Exception as e:
+            st.error(f"Error fetching following: {e}")
+            if db.is_connected():
+                cached = db.get_saved_connections(user_id, 'following')
+                if cached:
+                        return {'data': cached, 'meta': {'result_count': len(cached)}}
+            return None
 
 
 def display_live_metrics(user_info):

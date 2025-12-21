@@ -55,19 +55,164 @@ class Database:
             self.db.user_data.create_index('user_id')
             self.db.user_data.create_index('upload_date')
             
-            # Tweets collection indexes
-            # Note: If tweets is a time-series collection, unique indexes are not supported
-            # Time-series collections already have optimized indexes on timeField and metaField
-            try:
-                self.db.tweets.create_index([('user_id', 1), ('created_at', -1)])
-            except Exception:
-                # Skip if it's a time-series collection (indexes auto-created)
-                pass
+            # Connections
+            self.db.connections.create_index([('user_id', 1), ('type', 1), ('connection_id', 1)], unique=True)
+            
+            # Standard Tweets Collection (v2)
+            # Unique index on (user_id, tweet_id) to support upserts
+            self.db.tweets_v2.create_index([('user_id', 1), ('tweet_id', 1)], unique=True)
+            self.db.tweets_v2.create_index([('user_id', 1), ('created_at', -1)])
                 
         except Exception as e:
-            # Only warn if it's not a time-series collection issue
-            if 'time-series' not in str(e).lower():
                 st.warning(f"⚠️ Error setting up indexes: {e}")
+
+    # ... (skipping methods until save_tweets) ...
+
+    def save_tweets(self, user_id, tweets_data):
+        """Save user's tweets for growth tracking (Archive Upload)"""
+        if not self.connected:
+            return 0
+        
+        from pymongo import UpdateOne
+        
+        try:
+            operations = []
+            
+            for tweet_obj in tweets_data:
+                tweet = tweet_obj.get('tweet', {})
+                
+                tweet_doc = {
+                    'user_id': user_id,
+                    'tweet_id': tweet.get('id_str'),
+                    'created_at': self._parse_twitter_date(tweet.get('created_at')),
+                    'full_text': tweet.get('full_text', ''),
+                    'favorite_count': int(tweet.get('favorite_count', 0)),
+                    'retweet_count': int(tweet.get('retweet_count', 0)),
+                    'is_reply': 'in_reply_to_status_id' in tweet,
+                    'is_retweet': tweet.get('retweeted', False),
+                    'uploaded_at': datetime.now()
+                }
+                
+                # Upsert to prevent duplicates
+                op = UpdateOne(
+                    {'user_id': user_id, 'tweet_id': tweet.get('id_str')},
+                    {'$set': tweet_doc},
+                    upsert=True
+                )
+                operations.append(op)
+            
+            if operations:
+                result = self.db.tweets_v2.bulk_write(operations, ordered=False)
+                return result.upserted_count + result.modified_count
+            
+            return 0
+            
+        except Exception as e:
+            st.warning(f"⚠️ Error saving archive tweets: {e}")
+            return 0
+
+    # ... (skipping methods until get_growth_data) ...
+    
+    def get_growth_data(self, user_id, days=30):
+        """Get growth trajectory data for user"""
+        if not self.connected:
+            return None
+        
+        try:
+            from datetime import timedelta
+            
+            cutoff_date = datetime.now() - timedelta(days=days)
+            
+            # Get tweets in date range from v2 collection
+            tweets = self.db.tweets_v2.find({
+                'user_id': user_id,
+                'created_at': {'$gte': cutoff_date}
+            }).sort('created_at', 1)
+            
+            return list(tweets)
+        except Exception as e:
+            st.error(f"Error fetching growth data: {e}")
+            return None
+
+    # ... (skipping methods until save_live_tweets) ...
+
+    def save_live_tweets(self, user_id, tweets_data):
+        """
+        Incrementally save/update tweets from Live API.
+        Maps Live API format to internal DB schema.
+        """
+        if not self.connected or not tweets_data:
+            return 0
+        
+        from pymongo import UpdateOne
+        
+        try:
+            operations = []
+            for t in tweets_data:
+                # Map Live API fields to DB Schema (compatible with Archive)
+                # Live: id, text, created_at, public_metrics
+                
+                metrics = t.get('public_metrics', {})
+                created_at = self._parse_twitter_date(t.get('created_at'))
+                
+                tweet_doc = {
+                    'user_id': user_id,
+                    'tweet_id': t.get('id'),
+                    'created_at': created_at,
+                    'full_text': t.get('text'),
+                    'favorite_count': metrics.get('like_count', 0),
+                    'retweet_count': metrics.get('retweet_count', 0),
+                    'reply_count': metrics.get('reply_count', 0),
+                    'quote_count': metrics.get('quote_count', 0),
+                    'impression_count': metrics.get('impression_count', 0),
+                    'is_start_reply': t.get('text', '').startswith('@'), # Approximation
+                    'updated_at': datetime.now()
+                }
+                
+                # Upsert based on tweet_id AND user_id
+                op = UpdateOne(
+                    {'user_id': user_id, 'tweet_id': t.get('id')},
+                    {'$set': tweet_doc},
+                    upsert=True
+                )
+                operations.append(op)
+            
+            if operations:
+                result = self.db.tweets_v2.bulk_write(operations, ordered=False)
+                return result.upserted_count + result.modified_count
+            return 0
+            
+        except Exception as e:
+            st.warning(f"⚠️ Error saving tweets incrementally: {e}")
+            return 0
+
+    def get_saved_tweets(self, user_id, limit=100):
+        """Get latest tweets from DB"""
+        if not self.connected: 
+            return []
+        try:
+            # Sort by created_at desc
+            docs = self.db.tweets_v2.find({'user_id': user_id}).sort('created_at', -1).limit(limit)
+            
+            # Map back to Live API format for UI compatibility
+            mapped_tweets = []
+            for d in docs:
+                mapped_tweets.append({
+                    'id': d.get('tweet_id'),
+                    'text': d.get('full_text'),
+                    'created_at': d.get('created_at').strftime('%Y-%m-%dT%H:%M:%S.000Z') if d.get('created_at') else None,
+                    'public_metrics': {
+                        'like_count': d.get('favorite_count', 0),
+                        'retweet_count': d.get('retweet_count', 0),
+                        'reply_count': d.get('reply_count', 0),
+                        'quote_count': d.get('quote_count', 0),
+                        'impression_count': d.get('impression_count', 0)
+                    }
+                })
+            return mapped_tweets
+        except Exception as e:
+            st.error(f"Error retrieving saved tweets: {e}")
+            return []
     
     def is_connected(self):
         """Check if database is connected"""
@@ -85,6 +230,8 @@ class Database:
                 'name': user_info.get('name'),
                 'profile_image_url': user_info.get('profile_image_url'),
                 'verified': user_info.get('verified', False),
+                'access_token': user_info.get('access_token'),
+                'refresh_token': user_info.get('refresh_token'),
                 'last_login': datetime.now(),
                 'updated_at': datetime.now()
             }
@@ -145,12 +292,14 @@ class Database:
             return None
     
     def save_tweets(self, user_id, tweets_data):
-        """Save user's tweets for growth tracking"""
+        """Save user's tweets for growth tracking (Archive Upload)"""
         if not self.connected:
             return 0
         
+        from pymongo import UpdateOne
+        
         try:
-            tweets_to_insert = []
+            operations = []
             
             for tweet_obj in tweets_data:
                 tweet = tweet_obj.get('tweet', {})
@@ -167,20 +316,22 @@ class Database:
                     'uploaded_at': datetime.now()
                 }
                 
-                tweets_to_insert.append(tweet_doc)
+                # Upsert to prevent duplicates
+                op = UpdateOne(
+                    {'user_id': user_id, 'tweet_id': tweet.get('id_str')},
+                    {'$set': tweet_doc},
+                    upsert=True
+                )
+                operations.append(op)
             
-            if tweets_to_insert:
-                # Use ordered=False to continue on duplicate key errors
-                result = self.db.tweets.insert_many(tweets_to_insert, ordered=False)
-                return len(result.inserted_ids)
+            if operations:
+                result = self.db.tweets.bulk_write(operations, ordered=False)
+                return result.upserted_count + result.modified_count
             
             return 0
             
-        except DuplicateKeyError:
-            # Some tweets already exist, that's okay
-            return len(tweets_to_insert)
         except Exception as e:
-            st.error(f"Error saving tweets: {e}")
+            st.warning(f"⚠️ Error saving archive tweets: {e}")
             return 0
     
     def get_user_uploads(self, user_id, limit=10):
@@ -226,11 +377,242 @@ class Database:
         
         try:
             from datetime import datetime
-            # Twitter format: "Tue Dec 02 06:23:48 +0000 2025"
+            # Check if it's the V2 format (2023-12-01T10:00:00.000Z) or Archive format
+            if 'T' in date_str and date_str.endswith('Z'):
+                return datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+            
+            # Twitter Archive format: "Tue Dec 02 06:23:48 +0000 2025"
             return datetime.strptime(date_str, '%a %b %d %H:%M:%S %z %Y')
         except:
             return None
     
+    # === LIVE API CACHING ===
+    def save_live_api_response(self, user_id, endpoint, data):
+        """
+        Save a response from the live API to cache.
+        endpoint: 'followers', 'following', 'recent_tweets'
+        """
+        if not self.connected:
+            return None
+        
+        try:
+            # Ensure unique index exists for (user_id, endpoint)
+            # created loosely here or in setup
+            
+            cache_doc = {
+                'user_id': user_id,
+                'endpoint': endpoint,
+                'data': data,
+                'updated_at': datetime.now()
+            }
+            
+            # Upsert
+            result = self.db.api_cache.update_one(
+                {'user_id': user_id, 'endpoint': endpoint},
+                {'$set': cache_doc},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            st.warning(f"⚠️ Cache Save Error: {e}")
+            return False
+
+    def get_cache_age(self, user_id, endpoint):
+        """Get minutes since last update for specific data in DB"""
+        if not self.connected:
+            return 999999
+        
+        try:
+            latest_doc = None
+            if endpoint == 'recent_tweets':
+                latest_doc = self.db.tweets_v2.find_one(
+                    {'user_id': user_id},
+                    sort=[('updated_at', -1)]
+                )
+            elif endpoint in ['followers', 'following']:
+                latest_doc = self.db.connections.find_one(
+                    {'user_id': user_id, 'type': endpoint},
+                    sort=[('updated_at', -1)]
+                )
+            
+            if latest_doc and 'updated_at' in latest_doc:
+                delta = datetime.now() - latest_doc['updated_at']
+                return delta.total_seconds() / 60
+            
+            # Fallback to metadata if direct check fails
+            meta = self.db.api_cache.find_one({'user_id': user_id, 'endpoint': endpoint})
+            if meta:
+                delta = datetime.now() - meta.get('updated_at', datetime.min)
+                return delta.total_seconds() / 60
+                
+            return 999999
+        except:
+            return 999999
+
+    def get_live_api_response(self, user_id, endpoint):
+        """Retrieve cached API response"""
+        if not self.connected:
+            return None
+        
+        try:
+            doc = self.db.api_cache.find_one({'user_id': user_id, 'endpoint': endpoint})
+            if doc:
+                return doc.get('data')
+            return None
+        except Exception as e:
+            return None
+
+    # === INCREMENTAL LIVE DATA SAVING ===
+    def save_live_tweets(self, user_id, tweets_data):
+        """
+        Incrementally save/update tweets from Live API.
+        Maps Live API format to internal DB schema.
+        """
+        if not self.connected or not tweets_data:
+            return 0
+        
+        from pymongo import UpdateOne
+        
+        try:
+            operations = []
+            for t in tweets_data:
+                # Map Live API fields to DB Schema (compatible with Archive)
+                # Live: id, text, created_at, public_metrics
+                
+                metrics = t.get('public_metrics', {})
+                created_at = self._parse_twitter_date(t.get('created_at'))
+                
+                tweet_doc = {
+                    'user_id': user_id,
+                    'tweet_id': t.get('id'),
+                    'created_at': created_at,
+                    'full_text': t.get('text'),
+                    'favorite_count': metrics.get('like_count', 0),
+                    'retweet_count': metrics.get('retweet_count', 0),
+                    'reply_count': metrics.get('reply_count', 0),
+                    'quote_count': metrics.get('quote_count', 0),
+                    'impression_count': metrics.get('impression_count', 0),
+                    'is_start_reply': t.get('text', '').startswith('@'), # Approximation
+                    'updated_at': datetime.now()
+                }
+                
+                # Upsert based on tweet_id AND user_id
+                op = UpdateOne(
+                    {'user_id': user_id, 'tweet_id': t.get('id')},
+                    {'$set': tweet_doc},
+                    upsert=True
+                )
+                operations.append(op)
+            
+            if operations:
+                result = self.db.tweets.bulk_write(operations, ordered=False)
+                return result.upserted_count + result.modified_count
+            return 0
+            
+        except Exception as e:
+            st.warning(f"⚠️ Error saving tweets incrementally: {e}")
+            return 0
+
+    def get_saved_tweets(self, user_id, limit=100):
+        """Get latest tweets from DB"""
+        if not self.connected: 
+            return []
+        try:
+            # Sort by created_at desc
+            docs = self.db.tweets.find({'user_id': user_id}).sort('created_at', -1).limit(limit)
+            
+            # Map back to Live API format for UI compatibility
+            mapped_tweets = []
+            for d in docs:
+                mapped_tweets.append({
+                    'id': d.get('tweet_id'),
+                    'text': d.get('full_text'),
+                    'created_at': d.get('created_at').strftime('%Y-%m-%dT%H:%M:%S.000Z') if d.get('created_at') else None,
+                    'public_metrics': {
+                        'like_count': d.get('favorite_count', 0),
+                        'retweet_count': d.get('retweet_count', 0),
+                        'reply_count': d.get('reply_count', 0),
+                        'quote_count': d.get('quote_count', 0),
+                        'impression_count': d.get('impression_count', 0)
+                    }
+                })
+            return mapped_tweets
+        except Exception as e:
+            st.error(f"Error retrieving saved tweets: {e}")
+            return []
+
+    def save_live_connections(self, user_id, users_list, connection_type):
+        """
+        Incrementally save followers/following.
+        connection_type: 'followers' or 'following'
+        """
+        if not self.connected or not users_list:
+            return 0
+            
+        from pymongo import UpdateOne
+        
+        try:
+            operations = []
+            for u in users_list:
+                # Connection Doc
+                conn_doc = {
+                    'user_id': user_id,
+                    'connection_id': u.get('id'),
+                    'type': connection_type,
+                    'username': u.get('username'),
+                    'name': u.get('name'),
+                    'joined_at': u.get('created_at'), # Twitter created_at
+                    'public_metrics': u.get('public_metrics', {}),
+                    'profile_image_url': u.get('profile_image_url'),
+                    'verified': u.get('verified', False),
+                    'updated_at': datetime.now()
+                }
+                
+                # Upsert based on composite key
+                op = UpdateOne(
+                    {
+                        'user_id': user_id, 
+                        'connection_id': u.get('id'),
+                        'type': connection_type
+                    },
+                    {'$set': conn_doc},
+                    upsert=True
+                )
+                operations.append(op)
+            
+            if operations:
+                # Use 'connections' collection
+                result = self.db.connections.bulk_write(operations, ordered=False)
+                return result.upserted_count + result.modified_count
+            return 0
+        except Exception as e:
+            st.warning(f"⚠️ Error saving {connection_type}: {e}")
+            return 0
+
+    def get_saved_connections(self, user_id, connection_type, limit=1000):
+        """Get connected users from DB"""
+        if not self.connected: return []
+        try:
+            docs = self.db.connections.find(
+                {'user_id': user_id, 'type': connection_type}
+            ).limit(limit)
+            
+            # Map back to API format
+            mapped = []
+            for d in docs:
+                mapped.append({
+                    'id': d.get('connection_id'),
+                    'username': d.get('username'),
+                    'name': d.get('name'),
+                    'created_at': d.get('joined_at'),
+                    'public_metrics': d.get('public_metrics'),
+                    'profile_image_url': d.get('profile_image_url'),
+                    'verified': d.get('verified')
+                })
+            return mapped
+        except Exception as e:
+            return []
+
     def close(self):
         """Close database connection"""
         if self.client:

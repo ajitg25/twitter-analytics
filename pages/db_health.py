@@ -5,7 +5,7 @@ import os
 from database import get_database
 
 # Initialize authentication
-from auth import init_auth_state, handle_oauth_callback
+from auth import init_auth_state, handle_oauth_callback, get_current_user
 init_auth_state()
 handle_oauth_callback()
 
@@ -15,6 +15,16 @@ st.set_page_config(
     page_icon="🏥", 
     layout="wide"
 )
+
+# Admin Access Control
+ADMIN_USER = "unfiltered_ajit"
+user = get_current_user()
+
+if not user or user.get('username') != ADMIN_USER:
+    st.error("🚫 Access Denied: You do not have permission to view this page.")
+    if st.button("🏠 Back to Safety"):
+        st.switch_page("main.py")
+    st.stop()
 
 st.title("🏥 Database Health Check")
 st.markdown("---")
