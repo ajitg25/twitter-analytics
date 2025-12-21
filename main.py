@@ -104,7 +104,7 @@ if is_authenticated():
         # Refresh button logic
         force_refresh = False
         c1, c2 = st.columns([4, 1])
-        with c1: st.caption("Real-time data from your Twitter account")
+        with c1: st.caption("Real-time data from your Twitter account same as Premium")
         with c2:
             if st.button("🔄 Refresh", help="Fetch latest data from Twitter"):
                 if 'live_tweets_cache' in st.session_state: del st.session_state.live_tweets_cache
@@ -500,11 +500,27 @@ if is_authenticated():
 else:
     # Not authenticated landing
     st.info("👋 Sign in above to see your live Twitter stats instantly!")
+    
+    col_intro, col_video = st.columns([1, 1])
+    
+    with col_intro:
+        st.markdown("""
+        ### 🚀 How to get started:
+        1. **Sign in** using the button at the top right.
+        2. **That's it!** See your analytics completely free of cost.
+        3. **Analyze & Grow**: View your top tweets and track your 90-day growth.
+        
+        > **⚠️ Note**: We are using a **Free Tier** Twitter API account. If you see empty charts, it likely means the API limit has been reached for the hour.
+        """)
+    
+    with col_video:
+        st.video("https://youtu.be/EuEjpOdKSgU")
 
+    st.markdown("---")
     st.markdown("""
     ### ✨ What you get:
     - **Real-time Metrics**: Likes, retweets, and engagement rates.
-    - **Weekly Performance**: Track your growth over the last 90 days.
+    - **Long-term Insights**: Track your growth over the last 90 days.
     - **Top Tweets**: Identify your best performing content.
     """)
 
