@@ -96,25 +96,23 @@ class TwitterLiveAPI:
     
     def get_recent_tweets(self, user_id, max_results=100, force_refresh=False):
         """
-        Get user's recent tweets from the last 7 days - Cache First
+        Get user's tweets from the last 90 days - Cache First with Pagination
         """
         from datetime import datetime, timedelta, timezone
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        seven_days_ago_str = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
+        ninety_days_ago = datetime.now(timezone.utc) - timedelta(days=90)
+        start_time_str = ninety_days_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         if self.env == 'development':
             import random
             mock_tweets = []
             now = datetime.now()
-            # Generate more tweets across 7 days
-            for i in range(50):
-                created_at = now - timedelta(hours=i*3)
-                if created_at.timestamp() < (now - timedelta(days=7)).timestamp():
-                    continue
-                    
+            # Mock data for 90 days
+            for i in range(150):
+                created_at = now - timedelta(hours=i*14)
+                if created_at.timestamp() < (now - timedelta(days=90)).timestamp(): continue
                 mock_tweets.append({
                     'id': f'tweet_{i}',
-                    'text': f"Mock Tweet {i+1}: This is about your analytics! #Growth #XStats",
+                    'text': f"Mock Tweet {i+1}",
                     'created_at': created_at.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
                     'author_id': user_id,
                     'public_metrics': {
@@ -125,82 +123,99 @@ class TwitterLiveAPI:
                 })
             return mock_tweets
 
-        # PRODUCTION LOGIC - Cache First
         db = get_database()
-        
-        # 1. Check if we have recent data in DB (less than 15 mins old)
         if not force_refresh and db.is_connected():
             age = db.get_cache_age(user_id, 'recent_tweets')
-            if age < 15: # 15 minutes TTL
-                cached = db.get_saved_tweets(user_id, limit=200) # Get more from cache
+            if age < 15:
+                cached = db.get_saved_tweets(user_id, limit=3200) 
                 if cached:
                     st.caption(f"💾 Using database data (Checked {int(age)}m ago)")
                     return cached
 
-        # 2. If no fresh cache, hit API
         url = f"{self.base_url}/users/{user_id}/tweets"
         params = {
-            'max_results': 100, # Max results for 7 days
-            'start_time': seven_days_ago_str,
+            'max_results': 100,
+            'start_time': start_time_str,
             'tweet.fields': 'created_at,public_metrics,text,author_id',
             'expansions': 'author_id',
             'user.fields': 'username,name,profile_image_url'
         }
         
+        all_tweets = []
+        next_token = None
+        pages_fetched = 0
+        max_pages = 32 # Fetch up to 3,200 tweets (Twitter's max timeline depth)
+        
         try:
-            response = requests.get(url, headers=self.headers, params=params)
-            
-            # Handle expired token (401)
-            if response.status_code == 401:
-                if self._refresh_token():
-                    # Retry once with new token
-                    response = requests.get(url, headers=self.headers, params=params)
-                else:
-                    return db.get_saved_tweets(user_id, limit=max_results) if db.is_connected() else []
+            while pages_fetched < max_pages:
+                if next_token:
+                    params['pagination_token'] = next_token
+                
+                response = requests.get(url, headers=self.headers, params=params)
+                
+                # Handle expired token (401)
+                if response.status_code == 401:
+                    if self._refresh_token():
+                        response = requests.get(url, headers=self.headers, params=params)
+                    else:
+                        break
 
-            if response.status_code == 200:
-                tweets = response.json().get('data', [])
-                if tweets:
-                    # 1. Save to Database
-                    if db.is_connected():
-                         db.save_live_tweets(user_id, tweets)
-                         db.save_live_api_response(user_id, 'recent_tweets', {'count': len(tweets)})
+                if response.status_code == 200:
+                    data = response.json()
+                    page_tweets = data.get('data', [])
+                    if page_tweets:
+                        all_tweets.extend(page_tweets)
                     
-                    # 2. Export to Local CSV for Manual Analysis
-                    try:
-                        import pandas as pd
-                        from pathlib import Path
+                    next_token = data.get('meta', {}).get('next_token')
+                    pages_fetched += 1
+                    
+                    if not next_token:
+                        break
+                elif response.status_code == 429:
+                    st.warning("⚠️ Rate limit reached during sync. Showing partial data.")
+                    break
+                else:
+                    break
+
+            if all_tweets:
+                # 1. Save to Database
+                if db.is_connected():
+                     db.save_live_tweets(user_id, all_tweets)
+                     db.save_live_api_response(user_id, 'recent_tweets', {'count': len(all_tweets)})
+                
+                # Use all_tweets for the rest of progress
+                tweets = all_tweets
+                
+                # 2. Export to Local CSV for Manual Analysis
+                try:
+                    import pandas as pd
+                    from pathlib import Path
+                    
+                    # Create exports directory if it doesn't exist
+                    export_dir = Path("exports")
+                    export_dir.mkdir(exist_ok=True)
+                    
+                    # Flatten metrics for CSV compatibility
+                    flat_tweets = []
+                    for t in tweets:
+                        item = t.copy()
+                        metrics = item.pop('public_metrics', {})
+                        for k, v in metrics.items():
+                            item[f'metric_{k}'] = v
+                        flat_tweets.append(item)
                         
-                        # Create exports directory if it doesn't exist
-                        export_dir = Path("exports")
-                        export_dir.mkdir(exist_ok=True)
-                        
-                        # Flatten metrics for CSV compatibility
-                        flat_tweets = []
-                        for t in tweets:
-                            item = t.copy()
-                            metrics = item.pop('public_metrics', {})
-                            for k, v in metrics.items():
-                                item[f'metric_{k}'] = v
-                            flat_tweets.append(item)
-                            
-                        df = pd.DataFrame(flat_tweets)
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = export_dir / f"tweets_export_{user_id}_{timestamp}.csv"
-                        df.to_csv(filename, index=False)
-                        st.sidebar.info(f"📁 Local CSV Exported: {filename}")
-                    except Exception as export_error:
-                        print(f"CSV Export Exception: {export_error}")
+                    df = pd.DataFrame(flat_tweets)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = export_dir / f"tweets_export_{user_id}_{timestamp}.csv"
+                    df.to_csv(filename, index=False)
+                    st.sidebar.info(f"📁 Local CSV Exported: {filename.name}")
+                except Exception as export_error:
+                    print(f"CSV Export Exception: {export_error}")
 
                 return tweets
-            elif response.status_code == 429:
-                st.warning("⚠️ Rate limit reached. Using database fallback.")
-                if db.is_connected():
-                    return db.get_saved_tweets(user_id, limit=max_results)
-                return []
-            else:
-                st.error(f"Failed to fetch tweets: {response.text}")
-                return db.get_saved_tweets(user_id, limit=max_results) if db.is_connected() else []
+            
+            # Fallback to DB if all_tweets is empty but we reached here
+            return db.get_saved_tweets(user_id, limit=max_results) if db.is_connected() else []
                 
         except Exception as e:
             st.error(f"Error fetching tweets: {e}")
@@ -249,12 +264,22 @@ class TwitterLiveAPI:
              return None
 
         # Logic is shared, just reusing the fetched tweets
+        from datetime import datetime, timedelta
         seven_days_ago = datetime.now() - timedelta(days=7)
         recent_tweets = []
         for tweet in tweets:
-            created_at = datetime.strptime(tweet['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
-            if created_at >= seven_days_ago:
-                recent_tweets.append(tweet)
+            try:
+                # Handle possible formats
+                dt_str = tweet['created_at']
+                if 'T' in dt_str:
+                    created_at = datetime.strptime(dt_str.split('.')[0], '%Y-%m-%dT%H:%M:%S')
+                else:
+                    created_at = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+                
+                if created_at >= seven_days_ago:
+                    recent_tweets.append(tweet)
+            except:
+                recent_tweets.append(tweet) # Fallback if parse fails
         
         metrics = self.get_tweet_metrics_summary(recent_tweets)
         return {

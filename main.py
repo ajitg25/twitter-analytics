@@ -193,15 +193,19 @@ if is_authenticated():
                 df_chart['Date'] = pd.to_datetime(df_chart['Date'])
                 
                 # Filters
-                c_filter1, c_filter2 = st.columns([1, 4])
+                c_filter1, c_filter2 = st.columns([2, 5])
                 with c_filter1:
-                    time_range = st.radio("Time Range", ["7D", "2W"], horizontal=True, label_visibility="collapsed")
+                    time_range = st.radio("Time Range", ["7D", "2W", "1M", "3M"], horizontal=True, label_visibility="collapsed")
                 with c_filter2:
                     available_metrics = ["Impressions", "Likes", "Retweets", "Replies", "Quotes", "Bookmarks", "Engagement"]
                     metric_choice = st.selectbox("Select Metric to Chart", available_metrics, index=0, label_visibility="collapsed")
                 
                 # Filter Data by Date
-                days = 7 if time_range == "7D" else 14
+                if time_range == "7D": days = 7
+                elif time_range == "2W": days = 14
+                elif time_range == "1M": days = 30
+                else: days = 90
+                
                 end_date = pd.Timestamp.now().normalize()
                 start_date = end_date - pd.Timedelta(days=days-1)
                 
