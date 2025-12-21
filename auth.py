@@ -16,6 +16,8 @@ except:
     pass
 
 # Twitter OAuth 2.0 Configuration
+# IMPORTANT: In production (Streamlit Cloud), set REDIRECT_URI in Secrets to:
+# https://twitter-x-analytics.streamlit.app/
 TWITTER_CLIENT_ID = os.getenv('TWITTER_CLIENT_ID', st.secrets.get('TWITTER_CLIENT_ID', ''))
 TWITTER_CLIENT_SECRET = os.getenv('TWITTER_CLIENT_SECRET', st.secrets.get('TWITTER_CLIENT_SECRET', ''))
 REDIRECT_URI = os.getenv('REDIRECT_URI', st.secrets.get('REDIRECT_URI', 'http://localhost:8501'))
