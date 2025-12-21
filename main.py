@@ -1,827 +1,521 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import tempfile
-from twitter_utils import TwitterDashboard, fetch_usernames_from_api
+from auth import (
+    init_auth_state, 
+    handle_oauth_callback, 
+    is_authenticated, 
+    get_current_user,
+    logout,
+    get_twitter_auth_url
+)
+from database import get_database
 
-def guide_section():
-    """Show collapsible guide section"""
-    st.markdown("---")
-    
-    # Eye-catching banner that's always visible
-    st.markdown("""
-        <div style='background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%); padding: 20px 25px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(29, 161, 242, 0.3);'>
-            <h3 style='color: white; margin: 0; font-size: 22px; font-weight: 700;'>📖 First Time? Learn How to Get Your Twitter Archive</h3>
-            <p style='color: white; margin: 10px 0 0 0; font-size: 16px; opacity: 0.95;'>Follow these simple steps to download your Twitter data and start analyzing!</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Collapsible guide section with slide feature
-    with st.expander("👇 **Click here to see step-by-step instructions**", expanded=False):
-        
-        # Initialize step counter in session state
-        if 'current_step' not in st.session_state:
-            st.session_state.current_step = 1
-        
-        # Define all steps
-        steps = [
-            {
-                "title": "Step 1: Go to More",
-                "instructions for mobile": "**Mobile: Click on your profile and go to settings and support**",
-                "image": "images/step-1.png",
-                "caption": "Click on More from your profile menu"
-            },
-            {
-                "title": "Step 2: Click on settings and privacy",
-                "instructions for mobile": "**Mobile: Click on settings and privacy**",
-                "image": "images/step-2.png",
-                "caption": "Navigate to settings and privacy from your profile menu"
-            },
-            {
-                "title": "Step 3: Click on your account and then Download an archive of your data",
-                "instructions for mobile": "**Mobile: Click on your account and then Download an archive of your data**",
-                "image": "images/step-3.png",
-                "caption": "Click on your account and then Download an archive of your data"
-            },
-            {
-                "title": "Step 4: Verify Your Identity",
-                "instructions for mobile": "**Mobile: Twitter will ask you to verify - click 'Send code'**",
-                "image": "images/step-4.png",
-                "caption": "Verify your identity by sending a code to your email"
-            },
+from dotenv import load_dotenv
+import os
 
-            {
-                "title": "Step 5: Enter Verification Code",
-                "instructions for mobile": "**Mobile: Check your email and enter the code Twitter sent you**",
-                "image": "images/step-5.png",
-                "caption": "Enter the verification code from your email"
-            },
-            {
-                "title": "Step 6: Request your archive",
-                "instructions for mobile": "**Mobile: Request your archive from Twitter**",
-                "image": "images/step-6.png",
-                "caption": "Click on the request archive button"
-            },
-            {
-                "title": "Step 7: Wait for Email (this may take 24-48 hours)",
-                "instructions for mobile": "**Mobile: Twitter will email you when your archive is ready and click on the download link**",
-                "image": "images/step-7.png",
-                "caption": "You'll receive an email when your archive is ready and click on the download link"
-            },
-            {
-                "title": "Step 8: Download & Extract",
-                "instructions for mobile": "**Mobile: Unzip the archive to a folder**",
-                "image": "images/step-8.png",
-                "caption": "Unzip the archive to a folder"
-            },
-            {
-                "title": "Step 9: Open the data folder (this is the folder that contains all the data you need to upload)",
-                "instructions for mobile": "**Mobile: Open the data folder**",
-                "image": "images/step-9.png",
-                "caption": "Open the data folder"
-            },
-            {
-                "title": "Step 10: You are all set to upload your data",
-                "instructions for mobile": "**Mobile: You are all set to upload your data**",
-                "image": "images/step-10.png",
-                "caption": "You are all set to upload your data"
-            }
-        ]
-        
-        total_steps = len(steps)
-        current_step = st.session_state.current_step
-        
-        # Get current step data
-        step_data = steps[current_step - 1]
-        
-        # Step indicator
-        st.markdown(f"""
-        <div style='text-align: center; margin-bottom: 20px;'>
-            <span style='background-color: #1DA1F2; color: white; padding: 8px 16px; border-radius: 20px; font-weight: 600;'>
-                Step {current_step} of {total_steps}
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Display current step
-        st.markdown(f"### {step_data['title']}")
-        st.markdown(step_data['instructions for mobile'])
-        
-        # Fixed-size container CSS to prevent window resizing between steps
-        st.markdown("""
-        <style>
-        /* Fix image container height based on step 1 to prevent layout shift */
-        div[data-testid="stImage"] {
-            min-height: 500px !important;
-            max-height: 500px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        div[data-testid="stImage"] img {
-            max-height: 480px !important;
-            max-width: 100% !important;
-            object-fit: contain !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Display image with fixed container size (centered, fits in window)
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.image(step_data['image'], caption=step_data['caption'], use_container_width=True)
-        
-        # Navigation buttons
-        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
-        
-        with col1:
-            if st.button("⏮️ First", disabled=(current_step == 1), use_container_width=True):
-                st.session_state.current_step = 1
-                st.rerun()
-        
-        with col2:
-            if st.button("◀️ Previous", disabled=(current_step == 1), use_container_width=True):
-                st.session_state.current_step -= 1
-                st.rerun()
-        
-        with col4:
-            if st.button("Next ▶️", disabled=(current_step == total_steps), use_container_width=True):
-                st.session_state.current_step += 1
-                st.rerun()
-        
-        with col5:
-            if st.button("Last ⏭️", disabled=(current_step == total_steps), use_container_width=True):
-                st.session_state.current_step = total_steps
-                st.rerun()
-        
-        # Step dots indicator
-        dots_html = '<div style="text-align: center; margin-top: 20px;">'
-        for i in range(1, total_steps + 1):
-            if i == current_step:
-                dots_html += f'<span style="color: #1DA1F2; font-size: 20px; margin: 0 5px;">●</span>'
-            else:
-                dots_html += f'<span style="color: #ccc; font-size: 20px; margin: 0 5px;">○</span>'
-        dots_html += '</div>'
-        st.markdown(dots_html, unsafe_allow_html=True)
-        
-        # Final message on last step
-        if current_step == total_steps:
-            st.markdown("---")
-            st.success("✨ **Ready to upload!** Use the upload section above to get started!")
+# Load/Reload Environment Variables
+load_dotenv(override=True)
 
-def main():
-    st.set_page_config(
-        page_title="Twitter Analytics Dashboard", 
-        page_icon="🐦", 
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
-    
-    # Custom CSS - Hide sidebar completely
-    st.markdown("""
-        <style>
-        .main {
-            background-color: #f5f8fa;
-        }
-        .stMetric {
-            background-color: white;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        /* Hide the sidebar */
-        [data-testid="stSidebar"] {
-            display: none !important;
-        }
-        /* Adjust main content to full width */
-        [data-testid="stAppViewContainer"] > div:first-child {
-            width: 100% !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    # Centered Title
-    st.markdown("<h1 style='text-align: center;'>🐦 Twitter Analytics Dashboard</h1>", unsafe_allow_html=True)
-    
-    # File upload section - MAIN FEATURE ON TOP
-    # Center the content using columns
-    _, center_col, _ = st.columns([1, 2, 1])
-    
-    with center_col:
-        st.subheader("📂 Upload Your Twitter Archive Data")
-        
-        st.markdown("""
-        **📤 How to upload:**
-        
-        1. Extract your Twitter archive ZIP file received in your email
-        2. Unzip the archive to a folder
-        3. Open the **data/** folder inside the archive
-        4. Click "Browse files" below
-          5. Select **ALL files** (Press Cmd/Ctrl + A to select all) Refer to step 8 in the guide section for more details.
-          6. Click "Browse files" below"
-          7. Select all files from the data folder and click "open"
-        """)
-        
-        # Embedded YouTube video
-        st.markdown("### 📹 Watch Video Tutorial")
-        st.markdown("**Need help? Watch this step-by-step video guide:**")
-        
-        # Extract video ID from URL
-        video_id = "PviI7er6MaA"  # From https://youtu.be/PviI7er6MaA
-        
-        # Embed YouTube video
-        st.markdown(f"""
-        <div style="text-align: center; margin: 20px 0;">
-            <iframe 
-                width="100%" 
-                height="315" 
-                src="https://www.youtube.com/embed/{video_id}" 
-                title="Twitter Archive Upload Tutorial" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen
-                style="border-radius: 10px; margin: 0 auto; display: block;">
-            </iframe>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Custom CSS to hide the file list
-        st.markdown("""
-            <style>
-            /* Hide the file list/viewer that shows after upload */
-            [data-testid="stFileUploader"] section[data-testid="stFileUploaderDeleteBtn"] {
-                display: none;
-            }
-            [data-testid="stFileUploader"] section > button {
-                display: none;
-            }
-            div[data-testid="stFileUploadDropzone"] {
-                padding: 30px;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-        
-        # Placeholder for demo data alert
-        demo_alert = st.empty()
-        
-        uploaded_files = st.file_uploader(
-            "📂 Browse and select all files from the data/ folder",
-            type=['js'],
-            accept_multiple_files=True,
-            help="Select all files from the data folder - we'll automatically use what's needed",
-            label_visibility="visible"
-        )
-    
-    # Initialize data and dashboard
-    data = None
-    dashboard = None
+# Page config (Must be first)
+st.set_page_config(
+    page_title="Twitter Analytics Dashboard", 
+    page_icon="🐦", 
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-    if not uploaded_files:
-        # Show animated arrow pointing to upload button
-        with demo_alert:
-            st.markdown("""
-                <div style="text-align: center; margin-bottom: 15px; animation: fadeIn 1s;">
-                    <div style="
-                        display: inline-block;
-                        color: #0f1419; 
-                        font-weight: 600; 
-                        margin-bottom: 5px; 
-                        padding: 12px 20px;
-                        background-color: #e8f5fe;
-                        border-radius: 20px;
-                        border: 2px solid #1DA1F2;
-                        box-shadow: 0 4px 6px rgba(29, 161, 242, 0.2);
-                    ">
-                        👀 You are viewing <b>DEMO DATA</b>. Upload your own archive below!
-                    </div>
-                    <div style="
-                        font-size: 40px; 
-                        animation: bounce 1.5s infinite; 
-                        color: #1DA1F2; 
-                        margin-top: -10px;
-                        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    ">
-                        👇
-                    </div>
-                    <style>
-                        @keyframes bounce {
-                            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
-                            40% {transform: translateY(10px);}
-                            60% {transform: translateY(5px);}
-                        }
-                        @keyframes fadeIn {
-                            from {opacity: 0; transform: translateY(-10px);}
-                            to {opacity: 1; transform: translateY(0);}
-                        }
-                    </style>
+# Initialize authentication state
+init_auth_state()
+handle_oauth_callback()
+
+# Detect Environment Switch logic
+current_env = os.getenv('APP_ENV', 'production').lower()
+if 'app_env_cache' in st.session_state:
+    if st.session_state.app_env_cache != current_env:
+        # Environment changed! Clear data cache.
+        if 'live_tweets_cache' in st.session_state: del st.session_state.live_tweets_cache
+        if 'live_user_id_cache' in st.session_state: del st.session_state.live_user_id_cache
+        st.session_state.app_env_cache = current_env
+        st.toast(f"Environment changed to {current_env}. Cache cleared.", icon="🔄")
+        st.rerun()
+else:
+    st.session_state.app_env_cache = current_env
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .main { background-color: #f5f8fa; }
+    .stMetric { background-color: white; padding: 10px; border-radius: 5px; }
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="stAppViewContainer"] > div:first-child { width: 100% !important; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Main Header
+col1, col2, col3 = st.columns([1, 2, 1])
+
+# Center Title
+with col2:
+    st.markdown("<h1 style='text-align: center;'>🐦 Twitter Analytics</h1>", unsafe_allow_html=True)
+
+# Right Profile Section
+with col3:
+    if is_authenticated():
+        user = get_current_user()
+        if user:
+            # Profile Info
+            st.markdown(f"""
+                <div style="text-align: right; margin-bottom: 5px;">
+                    <img src="{user.get('profile_image_url', '')}" 
+                         style="border-radius: 50%; width: 35px; height: 35px; vertical-align: middle; border: 2px solid #1DA1F2;">
+                    <span style="margin-left: 8px; font-weight: 600; font-size: 14px;">@{user.get('username', '')}</span>
                 </div>
             """, unsafe_allow_html=True)
             
-        st.info("ℹ️ **Viewing Demo Data**: Upload your own Twitter archive above to see your analytics!")
-        
-        # Show guide section for those who want to know how to get data
-        guide_section()
-        
-        try:
-            # Use current directory where main.py is located
-            current_dir = Path(__file__).parent
-            dashboard = TwitterDashboard(current_dir)
-            data = dashboard.load_all_data()
-            
-        except Exception as e:
-            st.error(f"❌ Error loading demo data: {e}")
-            return
-            
+            # Logout Button (Right Aligned)
+            c_spacer, c_btn = st.columns([2, 1])
+            with c_btn:
+                if st.button("🚪 Logout", key="header_logout", use_container_width=True):
+                    logout()
+                    st.rerun()
     else:
-        # Silently filter to only the files we need
-        needed_files = ['follower.js', 'following.js', 'account.js', 'profile.js', 'tweets.js', 'like.js', 
-                        'block.js', 'mute.js', 'lists-created.js', 'direct-messages.js']
-        
-        filtered_files = [f for f in uploaded_files if f.name in needed_files]
-        
-        if not filtered_files:
-            st.error("❌ Required files not found. Please make sure you're uploading files from the data/ folder")
-            return
-        
-        # Just show simple success message
-        st.success(f"✅ Archive loaded successfully! Found {len(filtered_files)} data files.")
-        
-        # Create temporary directory to store uploaded files
-        temp_dir = tempfile.mkdtemp()
-        data_dir = Path(temp_dir) / 'data'
-        data_dir.mkdir()
-        
-        # Save only filtered files
-        for uploaded_file in filtered_files:
-            file_path = data_dir / uploaded_file.name
-            with open(file_path, 'wb') as f:
-                f.write(uploaded_file.getbuffer())
-        
-        # Load data
-        with st.spinner("🔄 Loading your Twitter data..."):
-            try:
-                dashboard = TwitterDashboard(temp_dir)
-                data = dashboard.load_all_data()
-                st.success(f"🎉 Successfully loaded your Twitter archive!")
-                
-                # Store data in session state
-                st.session_state.temp_dir = temp_dir
-                
-                # Celebration!
-                if 'balloons_shown' not in st.session_state:
-                    st.balloons()
-                    st.session_state.balloons_shown = True
-                    
-                st.success("🎉 **Data loaded successfully! See your analysis below...**")
-                
-            except Exception as e:
-                st.error(f"❌ Error loading data: {e}")
-                return
+        auth_url = get_twitter_auth_url()
+        if auth_url:
+            st.markdown(f"""
+                <div style="text-align: right; padding: 10px;">
+                    <a href="{auth_url}" target="_self" style="
+                        background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
+                        color: white; padding: 10px 20px; border-radius: 25px;
+                        text-decoration: none; font-weight: 600; display: inline-block;
+                        box-shadow: 0 4px 6px rgba(29, 161, 242, 0.3);
+                    ">🐦 Sign in with X</a>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # Store data in session state
-    if data:
-        st.session_state.twitter_data = data
-        st.session_state.dashboard = dashboard
+st.markdown("---")
+
+# === LIVE METRICS SECTION ===
+if is_authenticated():
+    user = get_current_user()
+    access_token = user.get('access_token')
     
-    # Display User Greeting
-    account = data.get('account', {})
-    if account:
-        username = account.get('username', '')
-        display_name = account.get('accountDisplayName', '')
+    if access_token:
+        from twitter_live_api import TwitterLiveAPI
         
-        st.markdown(f"""
-            # 👋 Hello, @{display_name}!
-            ### Welcome to your analytics dashboard, {username}
-        """)
-    
-    # ⚡ FOCUS: Follow-Back Analysis Buttons
-    st.markdown("### 🎯 Quick Actions")
-    st.caption("✨ Real @usernames will be fetched automatically from Twitter API")
-    
-    followers = data.get('followers', [])
-    following = data.get('following', [])
-    follower_ids = {f['follower']['accountId'] for f in followers}
-    following_ids = {f['following']['accountId'] for f in following}
-    
-    not_followed_back = following_ids - follower_ids  # You follow, they don't
-    followers_not_following_back = follower_ids - following_ids  # They follow, you don't
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button(f"🔍 Not Following Back ({len(not_followed_back)})", use_container_width=True, type="primary"):
-            st.session_state.show_not_followed_back = True
-            st.session_state.show_followers_not_following = False
-    
-    with col2:
-        if st.button(f"👥 Followers You Don't Follow ({len(followers_not_following_back)})", use_container_width=True):
-            st.session_state.show_followers_not_following = True
-            st.session_state.show_not_followed_back = False
-    
-    # Display selected list
-    if st.session_state.get('show_not_followed_back', False):
-        st.markdown("---")
-        st.subheader(f"🔍 Accounts That Don't Follow You Back ({len(not_followed_back)})")
-        st.caption("These are accounts you follow, but they don't follow you back")
+        st.markdown("## 📊 Your Live Twitter Analytics")
         
-        if len(not_followed_back) > 0:
-            # Create dataframe for better display with clickable links
-            import pandas as pd
-            
-            # Fetch usernames from Twitter API
-            with st.spinner("🔄 Fetching usernames from Twitter API..."):
-                usernames_data = fetch_usernames_from_api(
-                    list(not_followed_back)[:50]
-                )
-            
-            accounts_list = []
-            for idx, uid in enumerate(list(not_followed_back)[:50], 1):  # Show first 50
-                profile_url = f'https://twitter.com/intent/user?user_id={uid}'
-                
-                # Get username from API if available
-                if uid in usernames_data:
-                    user_data = usernames_data[uid]
-                    username = user_data['username']
-                    display_name = user_data['name']
-                    is_verified = user_data.get('verified', False)
-                    verified_badge = " ☑️" if is_verified else ""
-                    
-                    username_display = f"{username}\n{display_name}{verified_badge}" if display_name else f"{username}{verified_badge}"
+        # Refresh button logic
+        force_refresh = False
+        c1, c2 = st.columns([4, 1])
+        with c1: st.caption("Real-time data from your Twitter account")
+        with c2:
+            if st.button("🔄 Refresh", help="Fetch latest data from Twitter"):
+                if 'live_tweets_cache' in st.session_state: del st.session_state.live_tweets_cache
+                if 'live_user_id_cache' in st.session_state: del st.session_state.live_user_id_cache
+                force_refresh = True
+        
+        api = TwitterLiveAPI(access_token, refresh_token=user.get('refresh_token'))
+        
+        # Check cache
+        use_cache = 'live_tweets_cache' in st.session_state and 'live_user_id_cache' in st.session_state
+        
+        if use_cache and not force_refresh:
+            user_id = st.session_state.live_user_id_cache
+            recent_tweets = st.session_state.live_tweets_cache
+            st.caption("📦 Using session cache")
+        else:
+            with st.spinner("📡 Fetching your latest Twitter data..."):
+                user_id = api.get_my_user_id()
+                if user_id:
+                    # Pass force_refresh to ignore DB TTL settings
+                    recent_tweets = api.get_recent_tweets(user_id, max_results=50, force_refresh=force_refresh)
+                    st.session_state.live_user_id_cache = user_id
+                    st.session_state.live_tweets_cache = recent_tweets
                 else:
-                    username_display = '👆 Click profile to view'
+                    recent_tweets = []
+        
+        # Try to get archive stats as a "secondary indicator" if live data is missing
+        archive_stats = None
+        db = get_database()
+        if db.is_connected():
+            uploads = db.get_user_uploads(user_id, limit=1)
+            if uploads:
+                archive_stats = uploads[0].get('stats', {})
+
+        # === START DASHBOARD SKELETON ===
+        st.markdown("---")
+        
+        # 1. PROFILE / ACCOUNT SUMMARY (Row 1)
+        if not recent_tweets and archive_stats:
+            st.info("💡 Note: Twitter API is currently rate-limited. Showing last known stats from your archive.")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total Tweets", archive_stats.get('total_tweets', 0))
+            c2.metric("Followers", archive_stats.get('total_followers', 0))
+            c3.metric("Following", archive_stats.get('total_following', 0))
+            c4.metric("Historic Likes", archive_stats.get('total_likes', 0))
+        
+        # 2. ACCOUNT OVERVIEW CHART
+        st.markdown("### 📈 Account Overview")
+        if not recent_tweets:
+            st.warning("📭 No recent live tweets found (Likely due to API Rate Limit).")
+            # Show an empty/placeholder chart or message
+            st.info("The chart will appear here once your Twitter API quota resets or you refresh data.")
+        else:
+            # Data Processing for Chart
+            import plotly.express as px
+            import plotly.graph_objects as go
+            
+            tweets_for_chart = recent_tweets 
+            if tweets_for_chart:
+                # Convert to DataFrame
+                chart_data = []
+                for t in tweets_for_chart:
+                    metrics = t['public_metrics']
+                    created = t['created_at'].split('T')[0] # YYYY-MM-DD
+                    chart_data.append({
+                        'Date': created,
+                        'Impressions': metrics.get('impression_count', 0),
+                        'Likes': metrics.get('like_count', 0),
+                        'Retweets': metrics.get('retweet_count', 0),
+                        'Replies': metrics.get('reply_count', 0),
+                        'Quotes': metrics.get('quote_count', 0),
+                        'Bookmarks': metrics.get('bookmark_count', 0),
+                        'Engagement': (metrics.get('like_count', 0) + 
+                                       metrics.get('retweet_count', 0) + 
+                                       metrics.get('reply_count', 0) + 
+                                       metrics.get('quote_count', 0) +
+                                       metrics.get('bookmark_count', 0)),
+                        'Tweets': 1
+                    })
                 
-                accounts_list.append({
-                    '#': idx,
-                    'Account ID': uid,
-                    'Username': username_display,
-                    'Profile URL': profile_url
-                })
+                df_chart = pd.DataFrame(chart_data)
+                df_chart['Date'] = pd.to_datetime(df_chart['Date'])
+                
+                # Filters
+                c_filter1, c_filter2 = st.columns([2, 5])
+                with c_filter1:
+                    time_range = st.radio("Time Range", ["7D", "2W", "1M", "3M"], horizontal=True, label_visibility="collapsed")
+                with c_filter2:
+                    available_metrics = ["Impressions", "Likes", "Retweets", "Replies", "Quotes", "Bookmarks", "Engagement"]
+                    metric_choice = st.selectbox("Select Metric to Chart", available_metrics, index=0, label_visibility="collapsed")
+                
+                # Filter Data by Date
+                if time_range == "7D": days = 7
+                elif time_range == "2W": days = 14
+                elif time_range == "1M": days = 30
+                else: days = 90
+                
+                end_date = pd.Timestamp.now().normalize()
+                start_date = end_date - pd.Timedelta(days=days-1)
+                
+                df_filtered = df_chart[df_chart['Date'] >= start_date]
+                
+                # Group by Date
+                df_grouped = df_filtered.groupby('Date').sum().reset_index()
+                
+                # Ensure ALL dates in range are present (fill missing with 0)
+                all_dates = pd.date_range(start=start_date, end=end_date)
+                df_complete = pd.DataFrame({'Date': all_dates})
+                df_grouped = pd.merge(df_complete, df_grouped, on='Date', how='left').fillna(0)
+                
+                # Format Date as String for clean X-axis (e.g., "Dec 15")
+                df_grouped['DateStr'] = df_grouped['Date'].dt.strftime('%b %d')
+                
+                # Stats Cards Calculation
+                total_tweets = int(df_grouped['Tweets'].sum())
+                total_metric = int(df_grouped[metric_choice].sum())
+                secondary_metric_label = "Total Likes"
+                secondary_metric_value = int(df_grouped['Likes'].sum())
+                
+                if metric_choice == "Impressions":
+                    secondary_metric_label = "Total Impressions"
+                    secondary_metric_value = total_metric
+                elif metric_choice == "Engagement":
+                    secondary_metric_label = "Total Engagement"
+                    secondary_metric_value = total_metric
+                
+                avg_val = df_grouped[metric_choice].mean() if not df_grouped.empty else 0
+                
+                # Render Stats Cards
+                st.markdown("""
+                    <style>
+                    .live-stat-card {
+                        background-color: white;
+                        border: 1px solid #e1e8ed;
+                        border-radius: 10px;
+                        padding: 15px;
+                        text-align: center;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                    }
+                    .live-stat-label { font-size: 11px; color: #657786; letter-spacing: 0.5px; text-transform: uppercase; }
+                    .live-stat-value { font-size: 24px; font-weight: 700; color: #14171a; }
+                    </style>
+                """, unsafe_allow_html=True)
+                
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                with sc1: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Tweets In Period</div><div class="live-stat-value">{total_tweets}</div></div>', unsafe_allow_html=True)
+                with sc2: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">{secondary_metric_label}</div><div class="live-stat-value">{secondary_metric_value:,}</div></div>', unsafe_allow_html=True)
+                with sc3: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Total {metric_choice}</div><div class="live-stat-value">{total_metric:,}</div></div>', unsafe_allow_html=True)
+                with sc4: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Avg {metric_choice}/Day</div><div class="live-stat-value">{avg_val:.1f}</div></div>', unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Render Chart
+                if not df_grouped.empty:
+                    y_col = metric_choice
+                    fig = px.bar(
+                        df_grouped, 
+                        x='DateStr', 
+                        y=y_col,
+                        title=f"{metric_choice} Distribution",
+                        color_discrete_sequence=['#1DA1F2']
+                    )
+                    fig.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis=dict(
+                            showgrid=False, 
+                            title="", 
+                            type='category', # Force categorical to show every label
+                            tickmode='linear'
+                        ),
+                        yaxis=dict(showgrid=True, gridcolor='#F5F8FA', title=metric_choice),
+                        margin=dict(l=0, r=0, t=30, b=0),
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No data available for this time range.")
+            else:
+                st.warning("No live tweets found to display.")
             
-            df = pd.DataFrame(accounts_list)
+            st.markdown("---")
+
+            # Top Tweets
+            st.markdown("### 🔥 Top Performing Tweets")
+            sorted_tweets = sorted(recent_tweets, key=lambda t: sum([t['public_metrics'][k] for k in ['like_count', 'retweet_count', 'reply_count']]), reverse=True)
             
-            # Display dataframe with clickable links
-            st.dataframe(
-                df,
-                column_config={
-                    "#": st.column_config.NumberColumn("#", width="small"),
-                    "Account ID": st.column_config.TextColumn("Account ID", width="medium"),
-                    "Username": st.column_config.TextColumn("Username", width="medium", help="Real usernames fetched from Twitter API"),
-                    "Profile URL": st.column_config.LinkColumn("View Profile", display_text="Open Profile 🔗", width="medium")
-                },
-                use_container_width=True,
-                height=400,
-                hide_index=True
-            )
+            for idx, tweet in enumerate(sorted_tweets[:3], 1):
+                m = tweet['public_metrics']
+                total = m['like_count'] + m['retweet_count'] + m['reply_count']
+                with st.expander(f"#{idx} - {tweet['text'][:60]}... ({total} engagements)"):
+                    st.info(tweet['text'])
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Likes", m['like_count'])
+                    c2.metric("Retweets", m['retweet_count'])
+                    c3.metric("Replies", m['reply_count'])
+                    if tweet.get('id') and user.get('username'):
+                        st.markdown(f"[🔗 View on Twitter](https://twitter.com/{user['username']}/status/{tweet['id']})")
             
             st.markdown("---")
             
-            # Action buttons
-            col1, col2 = st.columns(2)
+            # === FOLLOWERS & FOLLOWING SECTION ===
+            st.markdown("### 👥 Connections")
             
-            with col1:
-                # Download button
-                csv_data = pd.DataFrame([
-                    {'Account ID': uid, 'Profile URL': f'https://twitter.com/intent/user?user_id={uid}'}
-                    for uid in not_followed_back
-                ])
-                csv = csv_data.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Download Full List (CSV)",
-                    data=csv,
-                    file_name="not_followed_back.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+            tab_followers, tab_following, tab_audit = st.tabs(["Followers", "Following", "Relationship Audit"])
             
-            with col2:
-                # Copy all URLs button
-                all_urls = '\n'.join([f'https://twitter.com/intent/user?user_id={uid}' for uid in not_followed_back])
-                st.download_button(
-                    label="📋 Copy All URLs",
-                    data=all_urls,
-                    file_name="profile_urls.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            st.info(f"💡 **Tip**: Click 'Open Profile 🔗' to view each account. Consider unfollowing inactive accounts to improve your follower ratio.")
-            
-            if len(not_followed_back) > 50:
-                st.warning(f"⚠️ Showing first 50 of {len(not_followed_back)} accounts. Download CSV for the full list.")
-        else:
-            st.success("✅ Great! Everyone you follow also follows you back!")
-    
-    if st.session_state.get('show_followers_not_following', False):
-        st.markdown("---")
-        st.subheader(f"👥 Followers You Don't Follow Back ({len(followers_not_following_back)})")
-        st.caption("These accounts follow you, but you don't follow them back")
-        
-        if len(followers_not_following_back) > 0:
-            # Create dataframe for better display with clickable links
-            import pandas as pd
-            
-            # Fetch usernames from Twitter API
-            with st.spinner("🔄 Fetching usernames from Twitter API..."):
-                usernames_data = fetch_usernames_from_api(
-                    list(followers_not_following_back)[:50]
-                )
-            
-            accounts_list = []
-            for idx, uid in enumerate(list(followers_not_following_back)[:50], 1):  # Show first 50
-                profile_url = f'https://twitter.com/intent/user?user_id={uid}'
-                
-                # Get username from API if available
-                if uid in usernames_data:
-                    user_data = usernames_data[uid]
-                    username = user_data['username']
-                    display_name = user_data['name']
-                    is_verified = user_data.get('verified', False)
-                    verified_badge = " ☑️" if is_verified else ""
+            # --- Followers Tab ---
+            with tab_followers:
+                if 'my_followers_list' in st.session_state and st.session_state.my_followers_list:
+                    followers_data = st.session_state.my_followers_list
+                    st.success(f"Loaded {len(followers_data)} followers")
                     
-                    username_display = f"{username}\n{display_name}{verified_badge}" if display_name else f"{username}{verified_badge}"
+                    # Convert to DataFrame for display
+                    df_followers = pd.DataFrame(followers_data)
+                    if not df_followers.empty:
+                        # Select and rename columns if they exist
+                        cols_to_show = ['username', 'name', 'created_at']
+                        if 'public_metrics' in df_followers.columns:
+                            # Flatten metrics for clean display
+                            display_data = []
+                            for f in followers_data:
+                                metrics = f.get('public_metrics', {})
+                                display_data.append({
+                                    'Username': f.get('username'),
+                                    'Name': f.get('name'),
+                                    'Followers': metrics.get('followers_count', 0),
+                                    'Following': metrics.get('following_count', 0),
+                                    'Joined': f.get('created_at', '').split('T')[0]
+                                })
+                            df_display = pd.DataFrame(display_data)
+                            st.dataframe(df_display, use_container_width=True)
+                        else:
+                            st.dataframe(df_followers[cols_to_show], use_container_width=True)
+                    
+                    if st.button("🔄 Refresh Followers List"):
+                        del st.session_state.my_followers_list
+                        st.rerun()
                 else:
-                    username_display = '👆 Click profile to view'
+                    st.info("Fetch your followers list from Twitter (Limit: 1000 most recent)")
+                    if st.button("📥 Fetch Followers"):
+                        with st.spinner("Fetching followers... This may take a moment."):
+                            result = api.get_followers(user_id, max_results=1000)
+                            if result and 'data' in result:
+                                st.session_state.my_followers_list = result['data']
+                                st.rerun()
+                            elif result and 'errors' in result:
+                                st.error(f"Error: {result['errors'][0].get('message')}")
+                            else:
+                                st.warning("No followers found or rate limit reached.")
+
+            # --- Following Tab ---
+            with tab_following:
+                if 'my_following_list' in st.session_state and st.session_state.my_following_list:
+                    following_data = st.session_state.my_following_list
+                    st.success(f"Loaded {len(following_data)} following")
+                    
+                    # Display logic
+                    display_data = []
+                    for f in following_data:
+                        metrics = f.get('public_metrics', {})
+                        display_data.append({
+                            'Username': f.get('username'),
+                            'Name': f.get('name'),
+                            'Followers': metrics.get('followers_count', 0),
+                            'Following': metrics.get('following_count', 0),
+                            'Joined': f.get('created_at', '').split('T')[0]
+                        })
+                    df_display = pd.DataFrame(display_data)
+                    st.dataframe(df_display, use_container_width=True)
+                    
+                    if st.button("🔄 Refresh Following List"):
+                        del st.session_state.my_following_list
+                        st.rerun()
+                else:
+                    st.info("Fetch accounts you follow (Limit: 1000 most recent)")
+                    if st.button("📥 Fetch Following"):
+                        with st.spinner("Fetching following list..."):
+                            result = api.get_following(user_id, max_results=1000)
+                            if result and 'data' in result:
+                                st.session_state.my_following_list = result['data']
+                                st.rerun()
+                            elif result and 'errors' in result:
+                                st.error(f"Error: {result['errors'][0].get('message')}")
+                            else:
+                                st.warning("No connections found or rate limit reached.")
+            
+            # --- Relationship Audit Tab ---
+            with tab_audit:
+                st.markdown("### 🎯 Relationship Audit")
+                st.caption("Identify people who don't follow you back and your fans.")
                 
-                accounts_list.append({
-                    '#': idx,
-                    'Account ID': uid,
-                    'Username': username_display,
-                    'Profile URL': profile_url
-                })
-            
-            df = pd.DataFrame(accounts_list)
-            
-            # Display dataframe with clickable links
-            st.dataframe(
-                df,
-                column_config={
-                    "#": st.column_config.NumberColumn("#", width="small"),
-                    "Account ID": st.column_config.TextColumn("Account ID", width="medium"),
-                    "Username": st.column_config.TextColumn("Username", width="medium", help="Real usernames fetched from Twitter API"),
-                    "Profile URL": st.column_config.LinkColumn("View Profile", display_text="Open Profile 🔗", width="medium")
-                },
-                use_container_width=True,
-                height=400,
-                hide_index=True
-            )
-            
-            st.markdown("---")
-            
-            # Action buttons
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Download button
-                csv_data = pd.DataFrame([
-                    {'Account ID': uid, 'Profile URL': f'https://twitter.com/intent/user?user_id={uid}'}
-                    for uid in followers_not_following_back
-                ])
-                csv = csv_data.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Download Full List (CSV)",
-                    data=csv,
-                    file_name="followers_not_following_back.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            
-            with col2:
-                # Copy all URLs button
-                all_urls = '\n'.join([f'https://twitter.com/intent/user?user_id={uid}' for uid in followers_not_following_back])
-                st.download_button(
-                    label="📋 Copy All URLs",
-                    data=all_urls,
-                    file_name="profile_urls.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            st.info(f"💡 **Tip**: Click 'Open Profile 🔗' to view each account. Consider following back engaged followers to build mutual connections.")
-            
-            if len(followers_not_following_back) > 50:
-                st.warning(f"⚠️ Showing first 50 of {len(followers_not_following_back)} accounts. Download CSV for the full list.")
-        else:
-            st.success("✅ You follow all your followers back!")
-    
-    st.markdown("---")
-    
-    # # Key Metrics
-    # st.subheader("📊 Key Metrics")
-    # metrics = dashboard.create_engagement_metrics(data)
-    
-    # cols = st.columns(4)
-    # cols[0].metric("Followers", metrics['Followers'])
-    # cols[1].metric("Following", metrics['Following'])
-    # cols[2].metric("Mutual Connections", metrics['Mutual Connections'])
-    # cols[3].metric("Engagement Rate", metrics['Engagement Rate'])
-    
-    # cols2 = st.columns(3)
-    # cols2[0].metric("Total Tweets", metrics['Total Tweets'])
-    # cols2[1].metric("Total Likes", metrics['Total Likes'])
-    # cols2[2].metric("Follower Ratio", metrics['Follower Ratio'])
-    
-    # st.markdown("---")
-    
-    # Insights Section
-    st.subheader("💡 Insights & Recommendations")
-    insights = dashboard.get_insights(data)
-    
-    for insight in insights:
-        if insight['type'] == 'success':
-            st.success(f"**{insight['title']}**\n\n{insight['message']}")
-        elif insight['type'] == 'warning':
-            st.warning(f"**{insight['title']}**\n\n{insight['message']}")
-        else:
-            st.info(f"**{insight['title']}**\n\n{insight['message']}")
-    
-    st.markdown("---")
-    
-    # Charts
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("👥 Follower Analysis")
-        fig = dashboard.create_follower_chart(data)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.subheader("🏷️ Top Hashtags")
-        fig = dashboard.create_hashtag_chart(data)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No hashtags found in your content.")
-    
-    st.markdown("---")
-    
-    # Account Overview Dashboard
-    st.subheader("Account overview")
-    
-    # Filters
-    # Filters
-    col_filters1, col_filters2 = st.columns([2, 1])
-    
-    with col_filters1:
-        # Time range selector - Moved to wider column for better visibility
-        time_ranges = {'7D': 7, '2W': 14, '4W': 28, '3M': 90, '1Y': 365, 'All': 3650}
-        selected_range_label = st.radio(
-            "Time Range",
-            options=list(time_ranges.keys()),
-            index=4,
-            horizontal=True,
-            label_visibility="collapsed",
-            key="time_range"
-        )
-        selected_days = time_ranges[selected_range_label]
-    
-    with col_filters2:
-        # Metric selector - Moved to narrower column
-        metric_options = {'Likes': 'likes', 'Retweets': 'retweets', 'Total Engagement': 'engagement'}
-        selected_metric_label = st.radio(
-            "Select Metric", 
-            options=list(metric_options.keys()), 
-            horizontal=True,
-            label_visibility="collapsed",
-            key="metric_select"
-        )
-        selected_metric = metric_options[selected_metric_label]
-    
-    # Generate Chart & Stats
-    overview_fig, overview_stats = dashboard.create_account_overview_chart(
-        data, 
-        metric=selected_metric, 
-        days=selected_days
-    )
-    
-    # Display Stats Cards
+                has_followers = 'my_followers_list' in st.session_state and st.session_state.my_followers_list
+                has_following = 'my_following_list' in st.session_state and st.session_state.my_following_list
+                
+                if has_followers and has_following:
+                    # Perform Audit
+                    followers_list = st.session_state.my_followers_list
+                    following_list = st.session_state.my_following_list
+                    
+                    # Extract IDs
+                    follower_ids = {u['id'] for u in followers_list}
+                    following_ids = {u['id'] for u in following_list}
+                    
+                    # Create Lookup Maps for User Data
+                    followers_map = {u['id']: u for u in followers_list}
+                    following_map = {u['id']: u for u in following_list}
+                    
+                    # Set Operations
+                    not_followed_back_ids = following_ids - follower_ids
+                    fans_ids = follower_ids - following_ids
+                    
+                    # Metrics
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Not Following Back", len(not_followed_back_ids))
+                    c2.metric("Fans (Not Followed)", len(fans_ids))
+                    c3.metric("Mutuals", len(follower_ids & following_ids))
+                    
+                    st.markdown("---")
+                    
+                    # Not Followed Back Section
+                    if not_followed_back_ids:
+                        st.subheader(f"⚠️ Not Following You Back ({len(not_followed_back_ids)})")
+                        st.caption("You follow these accounts, but they don't follow you back.")
+                        
+                        nfb_data = []
+                        for uid in not_followed_back_ids:
+                            user_obj = following_map.get(uid)
+                            if user_obj:
+                                metrics = user_obj.get('public_metrics', {})
+                                nfb_data.append({
+                                    'Username': user_obj.get('username'),
+                                    'Name': user_obj.get('name'),
+                                    'Followers': metrics.get('followers_count', 0),
+                                    'Following': metrics.get('following_count', 0),
+                                    'Profile': f"https://twitter.com/{user_obj.get('username')}"
+                                })
+                        
+                        df_nfb = pd.DataFrame(nfb_data)
+                        st.dataframe(
+                            df_nfb, 
+                            column_config={
+                                "Profile": st.column_config.LinkColumn("Profile Link")
+                            },
+                            use_container_width=True
+                        )
+                    else:
+                        st.success("✅ Everyone you follow follows you back!")
+                        
+                    st.markdown("---")
+                    
+                    # Fans Section
+                    if fans_ids:
+                        st.subheader(f"🌟 Fans You Don't Follow Back ({len(fans_ids)})")
+                        fans_data = []
+                        for uid in fans_ids:
+                            user_obj = followers_map.get(uid)
+                            if user_obj:
+                                metrics = user_obj.get('public_metrics', {})
+                                fans_data.append({
+                                    'Username': user_obj.get('username'),
+                                    'Name': user_obj.get('name'),
+                                    'Followers': metrics.get('followers_count', 0),
+                                    'Following': metrics.get('following_count', 0),
+                                    'Profile': f"https://twitter.com/{user_obj.get('username')}"
+                                })
+                        
+                        df_fans = pd.DataFrame(fans_data)
+                        st.dataframe(
+                            df_fans, 
+                            column_config={
+                                "Profile": st.column_config.LinkColumn("Profile Link")
+                            },
+                            use_container_width=True
+                        )
+                    
+                else:
+                    st.info("⚠️ Data Missing: Please fetch BOTH 'Followers' and 'Following' lists in the other tabs to perform this audit.")
+                    if st.button("📥 Fetch Everything Now"):
+                        with st.spinner("Fetching all connection data..."):
+                            # Fetch both
+                            if not has_followers:
+                                res_f = api.get_followers(user_id, max_results=1000)
+                                if res_f and 'data' in res_f:
+                                    st.session_state.my_followers_list = res_f['data']
+                            
+                            if not has_following:
+                                res_fol = api.get_following(user_id, max_results=1000)
+                                if res_fol and 'data' in res_fol:
+                                    st.session_state.my_following_list = res_fol['data']
+                            
+                            st.rerun()
+
+else:
+    # Not authenticated landing
+    st.info("👋 Sign in above to see your live Twitter stats instantly!")
     st.markdown("""
-        <style>
-        .stat-card {
-            background-color: #ffffff;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            text-align: center;
-            border: 1px solid #e1e8ed;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #657786;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 5px;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #14171a;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    stat_cols = st.columns(4)
-    
-    with stat_cols[0]:
-        st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-label">Total Tweets</div>
-                <div class="stat-value">{overview_stats['tweets']:,}</div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-    with stat_cols[1]:
-        st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-label">Total Likes</div>
-                <div class="stat-value">{overview_stats['likes']:,}</div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-    with stat_cols[2]:
-        st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-label">Total Retweets</div>
-                <div class="stat-value">{overview_stats['retweets']:,}</div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-    with stat_cols[3]:
-        avg_eng = (overview_stats['likes'] + overview_stats['retweets']) / overview_stats['tweets'] if overview_stats['tweets'] > 0 else 0
-        st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-label">Avg Engagement</div>
-                <div class="stat-value">{avg_eng:.1f}</div>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Display Chart
-    if overview_fig:
-        st.plotly_chart(overview_fig, use_container_width=True)
-    else:
-        st.info(f"No data available for the selected time range ({selected_range_label}).")
-    
-    # Second Row: Follows over time & Posts vs Replies
-    # col_row2_1, col_row2_2 = st.columns(2)
-    
-    # with col_row2_1:
-    #     st.markdown("### Follows over time")
-    #     st.info("ℹ️ **Data Not Available**\n\nTwitter archive exports do not include timestamps for when followers started following you. This chart cannot be generated from archive data.")
-        
-    # with col_row2_2:
-    posts_replies_fig = dashboard.create_posts_replies_chart(data, days=selected_days)
-    if posts_replies_fig:
-        st.plotly_chart(posts_replies_fig, use_container_width=True)
-    else:
-        st.info("No posts or replies found in this time range.")
-    
-    # Activity Heatmap
-    st.subheader("🔥 Activity Heatmap")
-    fig = dashboard.create_activity_heatmap(data)
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Not enough data for activity heatmap.")
-    
-    st.markdown("---")
-    
-    # # Detailed Lists
-    # with st.expander("📋 View Detailed Lists"):
-    #     tab1, tab2, tab3 = st.tabs(["Followers", "Following", "Mutual Connections"])
-        
-    #     followers = data.get('followers', [])
-    #     following = data.get('following', [])
-    #     follower_ids = {f['follower']['accountId'] for f in followers}
-    #     following_ids = {f['following']['accountId'] for f in following}
-    #     mutual_ids = follower_ids & following_ids
-        
-    #     with tab1:
-    #         st.write(f"Total Followers: {len(followers)}")
-    #         for f in followers[:20]:  # Show first 20
-    #             st.write(f"- User ID: {f['follower']['accountId']}")
-        
-    #     with tab2:
-    #         st.write(f"Total Following: {len(following)}")
-    #         for f in following[:20]:  # Show first 20
-    #             st.write(f"- User ID: {f['following']['accountId']}")
-        
-    #     with tab3:
-    #         st.write(f"Total Mutual Connections: {len(mutual_ids)}")
-    #         for uid in list(mutual_ids)[:20]:  # Show first 20
-    #             st.write(f"- User ID: {uid}")
-    
-    # Footer with credits and copyright
-    st.markdown("---")
-    st.markdown(
-        """
-        <div style='text-align: center; padding: 20px; color: #666;'>
-            <p>Made with ❤️ by Ajit Gupta (@unfiltered_ajit)</p>
-            <p style='font-size: 0.9em;'>© 2025 All rights reserved</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    ### ✨ What you get:
+    - **Real-time Metrics**: Likes, retweets, and engagement rates.
+    - **Weekly Performance**: Track your growth over the last 7 days.
+    - **Top Tweets**: Identify your best performing content.
+    """)
 
-if __name__ == "__main__":
-    main()
+st.markdown("---")
 
+# === ARCHIVE ANALYSIS LINK ===
+_, col2, _ = st.columns([1, 2, 1])
+if col2.button("🚀 Go to Archive Analysis & Upload", type="primary", use_container_width=True):
+    st.switch_page("pages/archive_analysis.py")
+
+st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0</div>", unsafe_allow_html=True)
