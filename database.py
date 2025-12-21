@@ -58,10 +58,10 @@ class Database:
             # Connections
             self.db.connections.create_index([('user_id', 1), ('type', 1), ('connection_id', 1)], unique=True)
             
-            # Standard Tweets Collection (v2)
+            # Standard Tweets Collection
             # Unique index on (user_id, tweet_id) to support upserts
-            self.db.tweets_v2.create_index([('user_id', 1), ('tweet_id', 1)], unique=True)
-            self.db.tweets_v2.create_index([('user_id', 1), ('created_at', -1)])
+            self.db.tweets.create_index([('user_id', 1), ('tweet_id', 1)], unique=True)
+            self.db.tweets.create_index([('user_id', 1), ('created_at', -1)])
                 
         except Exception as e:
                 st.warning(f"⚠️ Error setting up indexes: {e}")
@@ -102,7 +102,7 @@ class Database:
                 operations.append(op)
             
             if operations:
-                result = self.db.tweets_v2.bulk_write(operations, ordered=False)
+                result = self.db.tweets.bulk_write(operations, ordered=False)
                 return result.upserted_count + result.modified_count
             
             return 0
@@ -123,8 +123,8 @@ class Database:
             
             cutoff_date = datetime.now() - timedelta(days=days)
             
-            # Get tweets in date range from v2 collection
-            tweets = self.db.tweets_v2.find({
+            # Get tweets in date range from tweets collection
+            tweets = self.db.tweets.find({
                 'user_id': user_id,
                 'created_at': {'$gte': cutoff_date}
             }).sort('created_at', 1)
@@ -179,14 +179,11 @@ class Database:
                 operations.append(op)
             
             if operations:
-                print(f"DEBUG: Executing bulk_write with {len(operations)} operations")
-                result = self.db.tweets_v2.bulk_write(operations, ordered=False)
-                print(f"DEBUG: result.upserted_count={result.upserted_count}, result.modified_count={result.modified_count}, result.matched_count={result.matched_count}")
+                result = self.db.tweets.bulk_write(operations, ordered=False)
                 return result.upserted_count + result.modified_count
             return 0
             
         except Exception as e:
-            print(f"DEBUG Error: {e}")
             st.warning(f"⚠️ Error saving tweets incrementally: {e}")
             return 0
 
@@ -196,7 +193,7 @@ class Database:
             return []
         try:
             # Sort by created_at desc
-            docs = self.db.tweets_v2.find({'user_id': user_id}).sort('created_at', -1).limit(limit)
+            docs = self.db.tweets.find({'user_id': user_id}).sort('created_at', -1).limit(limit)
             
             # Map back to Live API format for UI compatibility
             mapped_tweets = []
@@ -363,8 +360,8 @@ class Database:
             
             cutoff_date = datetime.now() - timedelta(days=days)
             
-            # Get tweets in date range from v2 collection
-            tweets = self.db.tweets_v2.find({
+            # Get tweets in date range from tweets collection
+            tweets = self.db.tweets.find({
                 'user_id': user_id,
                 'created_at': {'$gte': cutoff_date}
             }).sort('created_at', 1)
@@ -429,7 +426,7 @@ class Database:
         try:
             latest_doc = None
             if endpoint == 'recent_tweets':
-                latest_doc = self.db.tweets_v2.find_one(
+                latest_doc = self.db.tweets.find_one(
                     {'user_id': user_id},
                     sort=[('updated_at', -1)]
                 )
