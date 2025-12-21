@@ -94,27 +94,33 @@ class TwitterLiveAPI:
             st.error(f"Error getting user ID: {e}")
             return None
     
-    def get_recent_tweets(self, user_id, max_results=10, force_refresh=False):
+    def get_recent_tweets(self, user_id, max_results=100, force_refresh=False):
         """
-        Get user's recent tweets - Cache First
+        Get user's recent tweets from the last 7 days - Cache First
         """
+        from datetime import datetime, timedelta, timezone
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        seven_days_ago_str = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
+
         if self.env == 'development':
-            # ... (mock logic preserved) ...
             import random
-            from datetime import timedelta
             mock_tweets = []
             now = datetime.now()
-            for i in range(max_results):
-                created_at = now - timedelta(hours=i*5)
+            # Generate more tweets across 7 days
+            for i in range(50):
+                created_at = now - timedelta(hours=i*3)
+                if created_at.timestamp() < (now - timedelta(days=7)).timestamp():
+                    continue
+                    
                 mock_tweets.append({
                     'id': f'tweet_{i}',
-                    'text': f"This is a mock tweet number {i+1} for development purposes. #DevMode #MockData",
+                    'text': f"Mock Tweet {i+1}: This is about your analytics! #Growth #XStats",
                     'created_at': created_at.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
                     'author_id': user_id,
                     'public_metrics': {
                         'impression_count': random.randint(100, 5000), 'like_count': random.randint(10, 500),
                         'retweet_count': random.randint(0, 100), 'reply_count': random.randint(0, 50),
-                        'quote_count': random.randint(0, 20)
+                        'quote_count': random.randint(0, 20), 'bookmark_count': random.randint(0, 30)
                     }
                 })
             return mock_tweets
@@ -126,7 +132,7 @@ class TwitterLiveAPI:
         if not force_refresh and db.is_connected():
             age = db.get_cache_age(user_id, 'recent_tweets')
             if age < 15: # 15 minutes TTL
-                cached = db.get_saved_tweets(user_id, limit=max_results)
+                cached = db.get_saved_tweets(user_id, limit=200) # Get more from cache
                 if cached:
                     st.caption(f"💾 Using database data (Checked {int(age)}m ago)")
                     return cached
@@ -134,7 +140,8 @@ class TwitterLiveAPI:
         # 2. If no fresh cache, hit API
         url = f"{self.base_url}/users/{user_id}/tweets"
         params = {
-            'max_results': min(max_results, 100),
+            'max_results': 100, # Max results for 7 days
+            'start_time': seven_days_ago_str,
             'tweet.fields': 'created_at,public_metrics,text,author_id',
             'expansions': 'author_id',
             'user.fields': 'username,name,profile_image_url'

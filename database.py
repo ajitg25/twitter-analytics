@@ -164,6 +164,7 @@ class Database:
                     'retweet_count': metrics.get('retweet_count', 0),
                     'reply_count': metrics.get('reply_count', 0),
                     'quote_count': metrics.get('quote_count', 0),
+                    'bookmark_count': metrics.get('bookmark_count', 0),
                     'impression_count': metrics.get('impression_count', 0),
                     'is_start_reply': t.get('text', '').startswith('@'), # Approximation
                     'updated_at': datetime.now()
@@ -178,11 +179,14 @@ class Database:
                 operations.append(op)
             
             if operations:
+                print(f"DEBUG: Executing bulk_write with {len(operations)} operations")
                 result = self.db.tweets_v2.bulk_write(operations, ordered=False)
+                print(f"DEBUG: result.upserted_count={result.upserted_count}, result.modified_count={result.modified_count}, result.matched_count={result.matched_count}")
                 return result.upserted_count + result.modified_count
             return 0
             
         except Exception as e:
+            print(f"DEBUG Error: {e}")
             st.warning(f"⚠️ Error saving tweets incrementally: {e}")
             return 0
 
@@ -359,8 +363,8 @@ class Database:
             
             cutoff_date = datetime.now() - timedelta(days=days)
             
-            # Get tweets in date range
-            tweets = self.db.tweets.find({
+            # Get tweets in date range from v2 collection
+            tweets = self.db.tweets_v2.find({
                 'user_id': user_id,
                 'created_at': {'$gte': cutoff_date}
             }).sort('created_at', 1)

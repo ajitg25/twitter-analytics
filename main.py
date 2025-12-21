@@ -175,11 +175,17 @@ if is_authenticated():
                     created = t['created_at'].split('T')[0] # YYYY-MM-DD
                     chart_data.append({
                         'Date': created,
+                        'Impressions': metrics.get('impression_count', 0),
                         'Likes': metrics.get('like_count', 0),
                         'Retweets': metrics.get('retweet_count', 0),
                         'Replies': metrics.get('reply_count', 0),
                         'Quotes': metrics.get('quote_count', 0),
-                        'Engagement': metrics.get('like_count', 0) + metrics.get('retweet_count', 0) + metrics.get('reply_count', 0) + metrics.get('quote_count', 0),
+                        'Bookmarks': metrics.get('bookmark_count', 0),
+                        'Engagement': (metrics.get('like_count', 0) + 
+                                       metrics.get('retweet_count', 0) + 
+                                       metrics.get('reply_count', 0) + 
+                                       metrics.get('quote_count', 0) +
+                                       metrics.get('bookmark_count', 0)),
                         'Tweets': 1
                     })
                 
@@ -187,25 +193,45 @@ if is_authenticated():
                 df_chart['Date'] = pd.to_datetime(df_chart['Date'])
                 
                 # Filters
-                c_filter1, c_filter2 = st.columns([1, 2])
+                c_filter1, c_filter2 = st.columns([1, 4])
                 with c_filter1:
                     time_range = st.radio("Time Range", ["7D", "2W"], horizontal=True, label_visibility="collapsed")
                 with c_filter2:
-                    metric_choice = st.radio("Metric", ["Likes", "Retweets", "Engagement"], horizontal=True, label_visibility="collapsed")
+                    available_metrics = ["Impressions", "Likes", "Retweets", "Replies", "Quotes", "Bookmarks", "Engagement"]
+                    metric_choice = st.selectbox("Select Metric to Chart", available_metrics, index=0, label_visibility="collapsed")
                 
                 # Filter Data by Date
                 days = 7 if time_range == "7D" else 14
-                start_date = pd.Timestamp.now() - pd.Timedelta(days=days)
+                end_date = pd.Timestamp.now().normalize()
+                start_date = end_date - pd.Timedelta(days=days-1)
+                
                 df_filtered = df_chart[df_chart['Date'] >= start_date]
                 
                 # Group by Date
                 df_grouped = df_filtered.groupby('Date').sum().reset_index()
                 
+                # Ensure ALL dates in range are present (fill missing with 0)
+                all_dates = pd.date_range(start=start_date, end=end_date)
+                df_complete = pd.DataFrame({'Date': all_dates})
+                df_grouped = pd.merge(df_complete, df_grouped, on='Date', how='left').fillna(0)
+                
+                # Format Date as String for clean X-axis (e.g., "Dec 15")
+                df_grouped['DateStr'] = df_grouped['Date'].dt.strftime('%b %d')
+                
                 # Stats Cards Calculation
-                total_tweets = df_grouped['Tweets'].sum()
-                total_likes = df_grouped['Likes'].sum()
-                total_retweets = df_grouped['Retweets'].sum()
-                avg_eng = df_grouped['Engagement'].mean() if not df_grouped.empty else 0
+                total_tweets = int(df_grouped['Tweets'].sum())
+                total_metric = int(df_grouped[metric_choice].sum())
+                secondary_metric_label = "Total Likes"
+                secondary_metric_value = int(df_grouped['Likes'].sum())
+                
+                if metric_choice == "Impressions":
+                    secondary_metric_label = "Total Impressions"
+                    secondary_metric_value = total_metric
+                elif metric_choice == "Engagement":
+                    secondary_metric_label = "Total Engagement"
+                    secondary_metric_value = total_metric
+                
+                avg_val = df_grouped[metric_choice].mean() if not df_grouped.empty else 0
                 
                 # Render Stats Cards
                 st.markdown("""
@@ -224,10 +250,10 @@ if is_authenticated():
                 """, unsafe_allow_html=True)
                 
                 sc1, sc2, sc3, sc4 = st.columns(4)
-                with sc1: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Total Tweets</div><div class="live-stat-value">{total_tweets}</div></div>', unsafe_allow_html=True)
-                with sc2: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Total Likes</div><div class="live-stat-value">{total_likes}</div></div>', unsafe_allow_html=True)
-                with sc3: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Total Retweets</div><div class="live-stat-value">{total_retweets}</div></div>', unsafe_allow_html=True)
-                with sc4: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Avg Engagement</div><div class="live-stat-value">{avg_eng:.1f}</div></div>', unsafe_allow_html=True)
+                with sc1: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Tweets In Period</div><div class="live-stat-value">{total_tweets}</div></div>', unsafe_allow_html=True)
+                with sc2: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">{secondary_metric_label}</div><div class="live-stat-value">{secondary_metric_value:,}</div></div>', unsafe_allow_html=True)
+                with sc3: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Total {metric_choice}</div><div class="live-stat-value">{total_metric:,}</div></div>', unsafe_allow_html=True)
+                with sc4: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Avg {metric_choice}/Day</div><div class="live-stat-value">{avg_val:.1f}</div></div>', unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
@@ -236,17 +262,23 @@ if is_authenticated():
                     y_col = metric_choice
                     fig = px.bar(
                         df_grouped, 
-                        x='Date', 
+                        x='DateStr', 
                         y=y_col,
-                        title=f"{metric_choice} Over Time",
+                        title=f"{metric_choice} Distribution",
                         color_discrete_sequence=['#1DA1F2']
                     )
                     fig.update_layout(
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(showgrid=False),
-                        yaxis=dict(showgrid=True, gridcolor='#F5F8FA'),
-                        margin=dict(l=0, r=0, t=30, b=0)
+                        xaxis=dict(
+                            showgrid=False, 
+                            title="", 
+                            type='category', # Force categorical to show every label
+                            tickmode='linear'
+                        ),
+                        yaxis=dict(showgrid=True, gridcolor='#F5F8FA', title=metric_choice),
+                        margin=dict(l=0, r=0, t=30, b=0),
+                        hovermode="x unified"
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
