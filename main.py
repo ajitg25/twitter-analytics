@@ -516,13 +516,3 @@ if col2.button("🚀 Go to Archive Analysis & Upload", type="primary", use_conta
     st.switch_page("pages/archive_analysis.py")
 
 st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0</div>", unsafe_allow_html=True)
-
-# DEBUG SECTION (Bottom of page)
-with st.expander("🛠️ System Config Check (Debug)"):
-    from auth import TWITTER_CLIENT_ID, REDIRECT_URI
-    st.write(f"**Redirect URI:** `{REDIRECT_URI}`")
-    st.write(f"**Client ID Present:** {'✅ Yes' if TWITTER_CLIENT_ID else '❌ No'}")
-    if TWITTER_CLIENT_ID:
-        st.code(f"{TWITTER_CLIENT_ID[:5]}...{TWITTER_CLIENT_ID[-5:]}", language="text")
-    st.info("💡 **Tip**: Ensure the Redirect URI above matches exactly what you have in the Twitter Developer Portal Callback URL.")
-    st.warning("If you see 'Refused to Connect', check that you added the URL to 'User Authentication Settings' in Twitter Portal, NOT just the App settings.")
