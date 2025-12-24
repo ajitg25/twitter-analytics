@@ -99,7 +99,6 @@ with col3:
         else:
             st.error("🔑 Auth Config Missing")
             st.info("💡 Make sure `TWITTER_CLIENT_ID` is set in your `.env` file.")
-            st.info("💡 Make sure `TWITTER_CLIENT_ID` is set in your `.env` file.")
 
 st.markdown("---")
 
