@@ -49,6 +49,16 @@ st.markdown("""
     .stMetric { background-color: white; padding: 10px; border-radius: 5px; }
     [data-testid="stSidebar"] { display: none !important; }
     [data-testid="stAppViewContainer"] > div:first-child { width: 100% !important; }
+    .live-stat-card {
+        background-color: white;
+        border: 1px solid #e1e8ed;
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .live-stat-label { font-size: 11px; color: #657786; letter-spacing: 0.5px; text-transform: uppercase; }
+    .live-stat-value { font-size: 24px; font-weight: 700; color: #14171a; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -86,8 +96,19 @@ with col3:
             st.markdown('<div style="text-align: right;">', unsafe_allow_html=True)
             st.link_button("🐦 Sign in with X", auth_url, type="primary")
             st.markdown('</div>', unsafe_allow_html=True)
+            
+            with st.expander("❓ Help: Still getting 'Something went wrong'?", expanded=False):
+                st.markdown("""
+                **Quick Local Fixes:**
+                1. **App Type (CRITICAL)**: In Twitter Portal, ensure 'Type of App' is set to **'Web App'**. **Native App will not work.**
+                2. **OAuth 2.0 Client ID**: Use the one from the bottom of the portal page.
+                3. **Callback URL**: Check that `http://localhost:8501` is added to **'User authentication settings'**.
+                4. **Trailing Slash**: Your portal has `http://localhost:8501`. Ensure your `.env` does NOT have a slash at the end.
+                """)
         else:
             st.error("🔑 Auth Config Missing")
+            st.info("💡 Make sure `TWITTER_CLIENT_ID` is set in your `.env` file.")
+            st.info("💡 Make sure `TWITTER_CLIENT_ID` is set in your `.env` file.")
 
 st.markdown("---")
 
@@ -113,23 +134,42 @@ if is_authenticated():
         
         api = TwitterLiveAPI(access_token, refresh_token=user.get('refresh_token'))
         
+        # Get user_id from our auth session (already fetched during login)
+        user_id = user.get('id')
+        
         # Check cache
         use_cache = 'live_tweets_cache' in st.session_state and 'live_user_id_cache' in st.session_state
         
+        recent_tweets = []
+
         if use_cache and not force_refresh:
-            user_id = st.session_state.live_user_id_cache
             recent_tweets = st.session_state.live_tweets_cache
             st.caption("📦 Using session cache")
-        else:
-            with st.spinner("📡 Fetching your latest Twitter data..."):
-                user_id = api.get_my_user_id()
-                if user_id:
-                    # Pass force_refresh to ignore DB TTL settings
-                    recent_tweets = api.get_recent_tweets(user_id, max_results=50, force_refresh=force_refresh)
+        elif force_refresh:
+            if user_id:
+                with st.spinner("📡 Refreshing your latest Twitter data..."):
+                    recent_tweets = api.get_recent_tweets(user_id, max_results=50, force_refresh=True)
                     st.session_state.live_user_id_cache = user_id
                     st.session_state.live_tweets_cache = recent_tweets
+                    st.rerun()
+            else:
+                st.error("❌ User ID not found in session. Please sign in again.")
+        else:
+            # Not in cache and not refreshing - show load button
+            st.info("📊 Live metrics are not loaded yet.")
+            if st.button("📥 Load Live Metrics", type="primary", width='stretch', help="This will fetch your latest 50 tweets and analytics from X"):
+                if user_id:
+                    with st.spinner("📡 Fetching your latest Twitter data..."):
+                        recent_tweets = api.get_recent_tweets(user_id, max_results=50)
+                        st.session_state.live_user_id_cache = user_id
+                        st.session_state.live_tweets_cache = recent_tweets
+                        st.rerun()
                 else:
-                    recent_tweets = []
+                    st.error("❌ User ID not found in session. Please sign in again.")
+            
+            # Stop if we don't have tweets yet to avoid rendering empty dashboard
+            if not recent_tweets:
+                st.stop()
         
         # Try to get archive stats as a "secondary indicator" if live data is missing
         archive_stats = None
@@ -233,22 +273,6 @@ if is_authenticated():
                 
                 avg_val = df_grouped[metric_choice].mean() if not df_grouped.empty else 0
                 
-                # Render Stats Cards
-                st.markdown("""
-                    <style>
-                    .live-stat-card {
-                        background-color: white;
-                        border: 1px solid #e1e8ed;
-                        border-radius: 10px;
-                        padding: 15px;
-                        text-align: center;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                    }
-                    .live-stat-label { font-size: 11px; color: #657786; letter-spacing: 0.5px; text-transform: uppercase; }
-                    .live-stat-value { font-size: 24px; font-weight: 700; color: #14171a; }
-                    </style>
-                """, unsafe_allow_html=True)
-                
                 sc1, sc2, sc3, sc4 = st.columns(4)
                 with sc1: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Tweets In Period</div><div class="live-stat-value">{total_tweets}</div></div>', unsafe_allow_html=True)
                 with sc2: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">{secondary_metric_label}</div><div class="live-stat-value">{secondary_metric_value:,}</div></div>', unsafe_allow_html=True)
@@ -280,7 +304,7 @@ if is_authenticated():
                         margin=dict(l=0, r=0, t=30, b=0),
                         hovermode="x unified"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.info("No data available for this time range.")
             else:
@@ -335,9 +359,9 @@ if is_authenticated():
                                     'Joined': f.get('created_at', '').split('T')[0]
                                 })
                             df_display = pd.DataFrame(display_data)
-                            st.dataframe(df_display, use_container_width=True)
+                            st.dataframe(df_display, width='stretch')
                         else:
-                            st.dataframe(df_followers[cols_to_show], use_container_width=True)
+                            st.dataframe(df_followers[cols_to_show], width='stretch')
                     
                     if st.button("🔄 Refresh Followers List"):
                         del st.session_state.my_followers_list
@@ -373,7 +397,7 @@ if is_authenticated():
                             'Joined': f.get('created_at', '').split('T')[0]
                         })
                     df_display = pd.DataFrame(display_data)
-                    st.dataframe(df_display, use_container_width=True)
+                    st.dataframe(df_display, width='stretch')
                     
                     if st.button("🔄 Refresh Following List"):
                         del st.session_state.my_following_list
@@ -448,7 +472,7 @@ if is_authenticated():
                             column_config={
                                 "Profile": st.column_config.LinkColumn("Profile Link")
                             },
-                            use_container_width=True
+                            width='stretch'
                         )
                     else:
                         st.success("✅ Everyone you follow follows you back!")
@@ -477,7 +501,7 @@ if is_authenticated():
                             column_config={
                                 "Profile": st.column_config.LinkColumn("Profile Link")
                             },
-                            use_container_width=True
+                            width='stretch'
                         )
                     
                 else:
@@ -523,6 +547,80 @@ else:
     - **Long-term Insights**: Track your growth over the last 90 days.
     - **Top Tweets**: Identify your best performing content.
     """)
+    
+    # Dashboard Preview
+    st.markdown("### 📊 Preview of your Dashboard (Sign-in to see yours)")
+    st.info("💡 Figures below are for demonstration. Sign in to see your real data!")
+    
+    # 1. Interactive Preview Filters
+    c_prev1, c_prev2 = st.columns([2, 5])
+    with c_prev1:
+        prev_time = st.radio("Preview Period", ["7D", "2W", "1M", "3M"], horizontal=True, label_visibility="collapsed", key="prev_time")
+    with c_prev2:
+        prev_metrics = ["Impressions", "Likes", "Retweets", "Replies", "Quotes", "Bookmarks", "Engagement"]
+        prev_metric_choice = st.selectbox("Preview Metric", prev_metrics, index=1, label_visibility="collapsed", key="prev_metric")
+
+    # 2. Mock Data Generator for Preview
+    import plotly.express as px
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime, timedelta
+
+    days_map = {"7D": 7, "2W": 14, "1M": 30, "3M": 90}
+    n_days = days_map[prev_time]
+    
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=n_days)
+    prev_data = pd.DataFrame({
+        'Date': dates,
+        'Tweets': np.random.randint(1, 5, size=n_days),
+        'Impressions': np.random.randint(500, 5000, size=n_days),
+        'Likes': np.random.randint(50, 300, size=n_days),
+        'Retweets': np.random.randint(10, 100, size=n_days),
+        'Replies': np.random.randint(5, 50, size=n_days),
+        'Quotes': np.random.randint(2, 20, size=n_days),
+        'Bookmarks': np.random.randint(5, 40, size=n_days)
+    })
+    prev_data['Engagement'] = prev_data['Likes'] + prev_data['Retweets'] + prev_data['Replies'] + prev_data['Quotes'] + prev_data['Bookmarks']
+    prev_data['DateStr'] = prev_data['Date'].dt.strftime('%b %d')
+
+    # 3. Stats Cards (Identical to Auth Dashboard)
+    p_total_tweets = int(prev_data['Tweets'].sum())
+    p_total_metric = int(prev_data[prev_metric_choice].sum())
+    p_avg_val = prev_data[prev_metric_choice].mean()
+    p_secondary_label = "Total Likes"
+    p_secondary_value = int(prev_data['Likes'].sum())
+    
+    if prev_metric_choice == "Impressions":
+        p_secondary_label = "Total Impressions"; p_secondary_value = p_total_metric
+    elif prev_metric_choice == "Engagement":
+        p_secondary_label = "Total Engagement"; p_secondary_value = p_total_metric
+
+    pc1, pc2, pc3, pc4 = st.columns(4)
+    with pc1: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Tweets In Period</div><div class="live-stat-value">{p_total_tweets}</div></div>', unsafe_allow_html=True)
+    with pc2: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">{p_secondary_label}</div><div class="live-stat-value">{p_secondary_value:,}</div></div>', unsafe_allow_html=True)
+    with pc3: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Total {prev_metric_choice}</div><div class="live-stat-value">{p_total_metric:,}</div></div>', unsafe_allow_html=True)
+    with pc4: st.markdown(f'<div class="live-stat-card"><div class="live-stat-label">Avg {prev_metric_choice}/Day</div><div class="live-stat-value">{p_avg_val:.1f}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 4. Preview Chart (Identical Layout)
+    fig = px.bar(prev_data, x='DateStr', y=prev_metric_choice, title=f"{prev_metric_choice} Distribution (Preview)", color_discrete_sequence=['#1DA1F2'])
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=False, title="", type='category'),
+        yaxis=dict(showgrid=True, gridcolor='#F5F8FA', title=prev_metric_choice),
+        margin=dict(l=0, r=0, t=30, b=0), height=350, hovermode="x unified"
+    )
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # 5. Mock Top Tweets Preview
+    st.markdown("#### 🔥 Top Performing Tweets (Preview)")
+    with st.expander("#1 - Building the future with Data & AI... (520 engagements)"):
+        st.info("Building the future with Data & AI is about more than just numbers—it’s about the stories behind them...")
+        tc1, tc2, tc3 = st.columns(3)
+        tc1.metric("Likes", 370); tc2.metric("Retweets", 95); tc3.metric("Replies", 55)
+
+    st.markdown("---")
 
 st.markdown("---")
 

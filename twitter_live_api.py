@@ -103,10 +103,41 @@ class TwitterLiveAPI:
         start_time_str = ninety_days_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         if self.env == 'development':
+            import pandas as pd
+            from pathlib import Path
+            export_dir = Path("exports")
+            csvs = list(export_dir.glob("tweets_export_*.csv")) if export_dir.exists() else []
+            
+            if csvs:
+                latest_csv = max(csvs, key=lambda p: p.stat().st_mtime)
+                try:
+                    df = pd.read_csv(latest_csv)
+                    tweets = []
+                    for _, row in df.iterrows():
+                        tweet = {
+                            'id': str(row.get('id', '')),
+                            'text': str(row.get('text', '')),
+                            'created_at': str(row.get('created_at', '')),
+                            'author_id': str(row.get('author_id', '')),
+                            'public_metrics': {
+                                'impression_count': int(row.get('metric_impression_count', 0)),
+                                'like_count': int(row.get('metric_like_count', 0)),
+                                'retweet_count': int(row.get('metric_retweet_count', 0)),
+                                'reply_count': int(row.get('metric_reply_count', 0)),
+                                'quote_count': int(row.get('metric_quote_count', 0)),
+                                'bookmark_count': int(row.get('metric_bookmark_count', 0))
+                            }
+                        }
+                        tweets.append(tweet)
+                    st.caption(f"🧪 Development Mode: Loaded {len(tweets)} tweets from {latest_csv.name}")
+                    return tweets
+                except Exception as e:
+                    st.warning(f"Failed to load export CSV: {e}")
+
+            # Fallback to Mock Data
             import random
             mock_tweets = []
             now = datetime.now()
-            # Mock data for 90 days
             for i in range(150):
                 created_at = now - timedelta(hours=i*14)
                 if created_at.timestamp() < (now - timedelta(days=90)).timestamp(): continue
