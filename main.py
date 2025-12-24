@@ -96,15 +96,6 @@ with col3:
             st.markdown('<div style="text-align: right;">', unsafe_allow_html=True)
             st.link_button("🐦 Sign in with X", auth_url, type="primary")
             st.markdown('</div>', unsafe_allow_html=True)
-            
-            with st.expander("❓ Help: Still getting 'Something went wrong'?", expanded=False):
-                st.markdown("""
-                **Quick Local Fixes:**
-                1. **App Type (CRITICAL)**: In Twitter Portal, ensure 'Type of App' is set to **'Web App'**. **Native App will not work.**
-                2. **OAuth 2.0 Client ID**: Use the one from the bottom of the portal page.
-                3. **Callback URL**: Check that `http://localhost:8501` is added to **'User authentication settings'**.
-                4. **Trailing Slash**: Your portal has `http://localhost:8501`. Ensure your `.env` does NOT have a slash at the end.
-                """)
         else:
             st.error("🔑 Auth Config Missing")
             st.info("💡 Make sure `TWITTER_CLIENT_ID` is set in your `.env` file.")
