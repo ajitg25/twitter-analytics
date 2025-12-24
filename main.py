@@ -145,21 +145,32 @@ if is_authenticated():
             else:
                 st.error("❌ User ID not found in session. Please sign in again.")
         else:
-            # Not in cache and not refreshing - show load button
-            st.info("📊 Live metrics are not loaded yet.")
-            if st.button("📥 Load Live Metrics", type="primary", width='stretch', help="This will fetch your latest 50 tweets and analytics from X"):
-                if user_id:
-                    with st.spinner("📡 Fetching your latest Twitter data..."):
-                        recent_tweets = api.get_recent_tweets(user_id, max_results=50)
-                        st.session_state.live_user_id_cache = user_id
-                        st.session_state.live_tweets_cache = recent_tweets
-                        st.rerun()
-                else:
-                    st.error("❌ User ID not found in session. Please sign in again.")
+            # Not in session cache - check database first
+            db = get_database()
+            if db.is_connected():
+                saved_tweets = db.get_saved_tweets(user_id, limit=50)
+                if saved_tweets:
+                    st.session_state.live_user_id_cache = user_id
+                    st.session_state.live_tweets_cache = saved_tweets
+                    recent_tweets = saved_tweets
+                    st.caption("💾 Loaded data from database")
             
-            # Stop if we don't have tweets yet to avoid rendering empty dashboard
+            # If still no tweets, then show the load button
             if not recent_tweets:
-                st.stop()
+                st.info("📊 Live metrics are not loaded yet.")
+                if st.button("📥 Load Live Metrics", type="primary", width='stretch', help="This will fetch your latest 50 tweets and analytics from X"):
+                    if user_id:
+                        with st.spinner("📡 Fetching your latest Twitter data..."):
+                            recent_tweets = api.get_recent_tweets(user_id, max_results=50)
+                            st.session_state.live_user_id_cache = user_id
+                            st.session_state.live_tweets_cache = recent_tweets
+                            st.rerun()
+                    else:
+                        st.error("❌ User ID not found in session. Please sign in again.")
+                
+                # Stop if we don't have tweets yet to avoid rendering empty dashboard
+                if not recent_tweets:
+                    st.stop()
         
         # Try to get archive stats as a "secondary indicator" if live data is missing
         archive_stats = None
@@ -198,13 +209,17 @@ if is_authenticated():
                 chart_data = []
                 for t in tweets_for_chart:
                     metrics = t['public_metrics']
+                    text = t.get('text', '')
+                    # Map: If it starts with @, it's likely a reply in this simplified context
+                    is_reply = 1 if text.startswith('@') else 0
+                    
                     created = t['created_at'].split('T')[0] # YYYY-MM-DD
                     chart_data.append({
                         'Date': created,
                         'Impressions': metrics.get('impression_count', 0),
                         'Likes': metrics.get('like_count', 0),
                         'Retweets': metrics.get('retweet_count', 0),
-                        'Replies': metrics.get('reply_count', 0),
+                        'RepliesMet': metrics.get('reply_count', 0), # Renamed to avoid column conflict
                         'Quotes': metrics.get('quote_count', 0),
                         'Bookmarks': metrics.get('bookmark_count', 0),
                         'Engagement': (metrics.get('like_count', 0) + 
@@ -212,7 +227,9 @@ if is_authenticated():
                                        metrics.get('reply_count', 0) + 
                                        metrics.get('quote_count', 0) +
                                        metrics.get('bookmark_count', 0)),
-                        'Tweets': 1
+                        'Tweets': 1,
+                        'Posts': 1 if is_reply == 0 else 0,
+                        'Replies': 1 if is_reply == 1 else 0
                     })
                 
                 df_chart = pd.DataFrame(chart_data)
@@ -295,6 +312,30 @@ if is_authenticated():
                         hovermode="x unified"
                     )
                     st.plotly_chart(fig, width='stretch')
+                    
+                    # --- ADDED: Posts vs Replies Chart ---
+                    st.markdown("### 📊 Posts vs Replies")
+                    fig_pvp = px.bar(
+                        df_grouped,
+                        x='DateStr',
+                        y=['Posts', 'Replies'],
+                        title="Content Distribution (Daily)",
+                        barmode='group',
+                        color_discrete_map={
+                            'Posts': '#1DA1F2',   # Twitter Blue
+                            'Replies': '#00BA7C'  # Twitter Green
+                        }
+                    )
+                    fig_pvp.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
+                        xaxis=dict(showgrid=False, title="", type='category'),
+                        yaxis=dict(showgrid=True, gridcolor='#F5F8FA', title="Count"),
+                        margin=dict(l=0, r=0, t=30, b=0),
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig_pvp, width='stretch')
                 else:
                     st.info("No data available for this time range.")
             else:
