@@ -19,6 +19,8 @@ class TwitterLiveAPI:
         }
         # Check environment
         self.env = os.getenv('APP_ENV', 'production').lower()
+        if 'rate_limit_reached' not in st.session_state:
+            st.session_state.rate_limit_reached = False
 
     def _refresh_token(self):
         """Internal helper to refresh the access token"""
@@ -203,6 +205,7 @@ class TwitterLiveAPI:
                     if not next_token:
                         break
                 elif response.status_code == 429:
+                    st.session_state.rate_limit_reached = True
                     st.warning("⚠️ Rate limit reached during sync. Showing partial data.")
                     break
                 else:
@@ -402,6 +405,7 @@ class TwitterLiveAPI:
                     db.save_live_api_response(user_id, 'followers', {'count': len(json_res['data'])})
                 return json_res
             elif response.status_code == 429:
+                st.session_state.rate_limit_reached = True
                 st.warning("⚠️ Rate limit reached for followers. Checking history...")
                 if db.is_connected():
                     cached = db.get_saved_connections(user_id, 'followers')
@@ -485,6 +489,7 @@ class TwitterLiveAPI:
                     db.save_live_api_response(user_id, 'following', {'count': len(json_res['data'])})
                 return json_res
             elif response.status_code == 429:
+                st.session_state.rate_limit_reached = True
                 st.warning("⚠️ Rate limit reached for following. Checking history...")
                 if db.is_connected():
                     cached = db.get_saved_connections(user_id, 'following')

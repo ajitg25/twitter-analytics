@@ -793,4 +793,47 @@ st.markdown("---")
 
 # Footer with credits and copyright
 st.markdown("---")
+# === COMMUNITY FUNDING NOTE ===
+st.markdown("""
+<style>
+    .funding-card {
+        background: linear-gradient(135deg, #1DA1F2 0%, #00BA7C 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 15px;
+        text-align: center;
+        margin: 40px 0 20px 0;
+        box-shadow: 0 10px 25px rgba(29, 161, 242, 0.15);
+    }
+    .funding-btn {
+        background: white;
+        color: #1DA1F2;
+        padding: 10px 25px;
+        border-radius: 25px;
+        text-decoration: none;
+        font-weight: bold;
+        display: inline-block;
+        margin: 10px 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    .funding-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); color: #00BA7C; }
+</style>
+<div class="funding-card">
+<h3 style="color: white; margin-top: 0;">🤝 Make it Community Driven</h3>
+<p style="font-size: 15px; line-height: 1.6; margin-bottom: 25px; color: white; opacity: 0.95;">
+I want to make this a community driven project now. It's possible to get the analytics for all users 
+with <b>significantly less costs</b> than the <a href="https://docs.x.com/x-api/introduction#api-tiers-&-pricing" target="_blank" style="color: white; text-decoration: underline;">$100-$5000/mo X charges</a> if we do a collective effort. 
+<br><br>
+<b>$200/month</b> is what it takes to power this for everyone. 
+Since this is now <b>open source</b>, your contributions directly help keep the public instance running.
+</p>
+<div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;">
+<a href="https://github.com/ajitg25/twitter-analytics" target="_blank" class="funding-btn">💻 GitHub Repo</a>
+<a href="https://github.com/sponsors/ajitg25" target="_blank" class="funding-btn">💖 GitHub Sponsor</a>
+<a href="https://buymeacoffee.com/ajit_gupta" target="_blank" class="funding-btn">☕ Buy Me a Coffee</a>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("<br><br><div style='text-align: center; color: #8899a6;'>Twitter Analytics Dashboard v2.0 <br> Made with ❤️ by @unfiltered_ajit</div>", unsafe_allow_html=True)
