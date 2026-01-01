@@ -76,7 +76,6 @@ coverage.xml
 exports/
 growth_report.json
 *.csv
-*.json
 twitter-*/
 
 # Twitter archive data (uncomment if you don't want to commit it)
