@@ -53,13 +53,7 @@ def show_login_button():
     service_url = os.getenv('RETTIWT_SERVICE_URL', 'http://localhost:3001')
     
     try:
-        # Pass existing cookies (if any) to validate the session
-        headers = {}
-        existing_cookies = st.session_state.get('rettiwt_cookies')
-        if existing_cookies:
-            headers['X-Rettiwt-Cookies'] = existing_cookies
-        
-        response = requests.get(f"{service_url}/api/auth/status", headers=headers, timeout=5)
+        response = requests.get(f"{service_url}/api/auth/status", timeout=5)
         if response.status_code != 200:
             st.error("⚠️ Rettiwt service error")
             return
@@ -115,6 +109,13 @@ def show_login_button():
                     except:
                         pass
                     st.rerun()
+            return
+        
+        # If authenticated but no user info, try to fetch it
+        if data.get('authenticated') and not data.get('user'):
+            st.warning("⚠️ Session detected but user info missing. Click to refresh login.")
+            if st.button("🔄 Refresh Session", type="primary", use_container_width=True):
+                _start_auth(service_url)
             return
         
         # Show login button
@@ -199,7 +200,7 @@ def _complete_auth(service_url: str):
                         db = Database()
                         if db.is_connected():
                             db.create_or_update_user(st.session_state.user_info)
-                            st.success(f"✅ Logged in as @{user.get('username')} - Saved to database!")
+                            st.success(f"✅ Logged in as @{user.get('username')}!")
                     except Exception as e:
                         st.success(f"✅ Logged in as @{user.get('username')}")
                         print(f"DB Save Error: {e}")

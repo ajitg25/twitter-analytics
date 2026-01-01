@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: rettiwt-service
+    runtime: node
+    region: oregon
+    plan: starter  # $7/month - supports background workers
+    buildCommand: npm install && npx playwright install chromium --with-deps
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+    healthCheckPath: /health
+    autoDeploy: true
+

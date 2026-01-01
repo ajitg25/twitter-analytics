@@ -18,7 +18,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: '../.env' });
 
 const app = express();
-const PORT = process.env.RETTIWT_PORT || 3001;
+const PORT = process.env.PORT || process.env.RETTIWT_PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
