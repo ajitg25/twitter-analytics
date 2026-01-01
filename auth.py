@@ -53,7 +53,13 @@ def show_login_button():
     service_url = os.getenv('RETTIWT_SERVICE_URL', 'http://localhost:3001')
     
     try:
-        response = requests.get(f"{service_url}/api/auth/status", timeout=5)
+        # Pass existing cookies (if any) to validate the session
+        headers = {}
+        existing_cookies = st.session_state.get('rettiwt_cookies')
+        if existing_cookies:
+            headers['X-Rettiwt-Cookies'] = existing_cookies
+        
+        response = requests.get(f"{service_url}/api/auth/status", headers=headers, timeout=5)
         if response.status_code != 200:
             st.error("⚠️ Rettiwt service error")
             return

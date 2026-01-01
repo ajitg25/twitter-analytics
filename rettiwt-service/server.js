@@ -946,29 +946,12 @@ async function getPlaywright() {
     return chromium;
 }
 
-// Read saved session info
-function getSavedSession() {
-    try {
-        const sessionPath = path.join(__dirname, '.session.json');
-        if (fs.existsSync(sessionPath)) {
-            return JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
-        }
-    } catch (e) {}
-    return null;
-}
+// NOTE: Session storage removed for multi-user support
+// Cookies are now stored per-user in MongoDB by the Streamlit app
+// and passed via X-Rettiwt-Cookies header on each request
 
-// Save session info
-function saveSession(userInfo) {
-    try {
-        const sessionPath = path.join(__dirname, '.session.json');
-        fs.writeFileSync(sessionPath, JSON.stringify(userInfo, null, 2));
-    } catch (e) {
-        console.error('Failed to save session:', e.message);
-    }
-}
-
-// Clear session
 function clearSession() {
+    // Clean up any old session files from single-user mode
     try {
         const sessionPath = path.join(__dirname, '.session.json');
         if (fs.existsSync(sessionPath)) {
@@ -978,65 +961,81 @@ function clearSession() {
 }
 
 // Check current auth status
+// Multi-user: This endpoint is now stateless. 
+// - If auth is in progress, return that status
+// - If cookies passed via header, validate them
+// - Otherwise, not authenticated (user needs to login)
 app.get('/api/auth/status', async (req, res) => {
-    const apiKey = process.env.RETTIWT_API_KEY || '';
-    const hasValidAuth = apiKey && !(/^\d+$/.test(apiKey)) && apiKey.includes(';');
-    
-    if (!hasValidAuth) {
+    // Check if auth flow is in progress
+    if (authInProgress) {
         return res.json({
             authenticated: false,
-            auth_in_progress: authInProgress,
-            message: 'No valid session found'
+            auth_in_progress: true,
+            message: 'Login browser is open. Complete login and click the button.'
         });
     }
     
-    // Check saved session first
-    const savedSession = getSavedSession();
-    if (savedSession && savedSession.username) {
-        // Verify session is still valid by making a simple API call
+    // Check if cookies are passed via header (for validating existing session)
+    const headerCookies = req.headers['x-rettiwt-cookies'];
+    if (headerCookies && headerCookies.includes(';')) {
+        // Validate these cookies by making a test API call
         try {
-            const headers = getAuthHeaders(req);
-            if (headers) {
-                // Try to fetch user info for the saved username
-                const userVars = { screen_name: savedSession.username, withSafetyModeUserFields: true };
-                const userUrl = `https://x.com/i/api/graphql/xmU6X_CKVnQ5lSrCbAmJsg/UserByScreenName?variables=${encodeURIComponent(JSON.stringify(userVars))}&features=${encodeURIComponent(JSON.stringify(FEATURES))}`;
+            const [authToken, ct0] = headerCookies.split(';');
+            const headers = {
+                'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+                'cookie': `auth_token=${authToken}; ct0=${ct0}`,
+                'x-csrf-token': ct0,
+                'x-twitter-auth-type': 'OAuth2Session',
+                'x-twitter-active-user': 'yes',
+                'content-type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            };
+            
+            // Use Viewer endpoint to get current user
+            const viewerUrl = 'https://x.com/i/api/graphql/2A6VqXzLLCfPplvYlmYGpQ/Viewer?variables=%7B%22withCommunitiesMemberships%22%3Atrue%7D&features=%7B%22creator_subscriptions_tweet_preview_api_enabled%22%3Atrue%7D';
+            const viewerResponse = await fetch(viewerUrl, { headers });
+            
+            if (viewerResponse.status === 200) {
+                const viewerData = await viewerResponse.json();
+                const viewer = viewerData?.data?.viewer?.user_results?.result;
                 
-                const userResponse = await fetch(userUrl, { headers });
-                const userData = await userResponse.json();
-                
-                const user = userData?.data?.user?.result;
-                
-                if (user) {
-                    const legacy = user.legacy || {};
+                if (viewer) {
+                    const legacy = viewer.legacy || {};
                     return res.json({
                         authenticated: true,
                         user: {
-                            id: user.rest_id,
+                            id: viewer.rest_id,
                             username: legacy.screen_name,
                             name: legacy.name,
                             profile_image_url: legacy.profile_image_url_https?.replace('_normal', '_400x400'),
                             description: legacy.description,
-                            verified: user.is_blue_verified || false,
+                            verified: viewer.is_blue_verified || false,
                             followers_count: legacy.followers_count,
                             following_count: legacy.friends_count,
                             tweet_count: legacy.statuses_count,
                             created_at: legacy.created_at
                         },
-                        cookies: apiKey  // Include cookies for Streamlit to use
+                        cookies: headerCookies
                     });
                 }
             }
         } catch (error) {
-            console.error('Session validation failed:', error.message);
+            console.error('Cookie validation failed:', error.message);
         }
+        
+        // Cookies are invalid
+        return res.json({
+            authenticated: false,
+            auth_in_progress: false,
+            message: 'Session expired. Please login again.'
+        });
     }
     
-    // If no saved session, we have cookies but don't know the user
-    // Return authenticated with limited info
-    return res.json({ 
-        authenticated: true,
-        user: savedSession || null,
-        message: savedSession ? 'Session valid' : 'Authenticated but user info not available. Please re-login.'
+    // No auth in progress, no cookies passed = not authenticated
+    return res.json({
+        authenticated: false,
+        auth_in_progress: false,
+        message: 'Not logged in'
     });
 });
 
@@ -1205,9 +1204,6 @@ app.post('/api/auth/complete', async (req, res) => {
                         created_at: legacy.created_at
                     };
                     console.log(`✅ Logged in as @${userInfo.username}`);
-                    
-                    // Save session to file for persistence
-                    saveSession(userInfo);
                 }
             } else {
                 console.log(`⚠️ Viewer endpoint returned status ${viewerResponse.status}`);
@@ -1269,7 +1265,6 @@ app.post('/api/auth/complete', async (req, res) => {
                                         created_at: legacy.created_at
                                     };
                                     console.log(`✅ Logged in as @${userInfo.username}`);
-                                    saveSession(userInfo);
                                 }
                             }
                         } else {
