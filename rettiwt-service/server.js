@@ -8,6 +8,12 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: '../.env' });
 
@@ -17,9 +23,18 @@ const PORT = process.env.RETTIWT_PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Parse cookies from environment
-function getAuthHeaders() {
-    const apiKey = process.env.RETTIWT_API_KEY || '';
+// Parse cookies - supports per-request cookies via header OR fallback to .env
+function getAuthHeaders(req = null) {
+    let apiKey = '';
+    
+    // Priority 1: Per-request cookies via X-Rettiwt-Cookies header (for multi-user)
+    if (req && req.headers['x-rettiwt-cookies']) {
+        apiKey = req.headers['x-rettiwt-cookies'];
+    }
+    // Priority 2: Fall back to environment variable (single-user/admin mode)
+    else {
+        apiKey = process.env.RETTIWT_API_KEY || '';
+    }
     
     if (!apiKey || /^\d+$/.test(apiKey)) {
         // Guest mode or numeric guest token
@@ -92,7 +107,7 @@ const FEATURES = {
 };
 
 async function twitterGraphQL(queryId, operationName, variables) {
-    const headers = getAuthHeaders();
+    const headers = getAuthHeaders(req);
     if (!headers) {
         throw new Error('Not authenticated');
     }
@@ -114,7 +129,7 @@ async function twitterGraphQL(queryId, operationName, variables) {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    const headers = getAuthHeaders();
+    const headers = getAuthHeaders(req);
     res.json({ 
         status: 'ok', 
         service: 'twitter-api-service',
@@ -126,7 +141,7 @@ app.get('/health', (req, res) => {
 // Get user details by username
 app.get('/api/user/:username', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated. Run: npm run auth' });
         }
@@ -183,7 +198,7 @@ app.get('/api/user/:username', async (req, res) => {
 // Get user's tweets (timeline)
 app.get('/api/user/:username/tweets', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -269,7 +284,7 @@ app.get('/api/user/:username/tweets', async (req, res) => {
 // Get ALL tweets from last N days (with automatic pagination)
 app.get('/api/user/:username/tweets/all', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -445,7 +460,7 @@ app.get('/api/user/:username/tweets/all', async (req, res) => {
 // Get user's followers
 app.get('/api/user/:username/followers', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -522,7 +537,7 @@ app.get('/api/user/:username/followers', async (req, res) => {
 // Get user's following
 app.get('/api/user/:username/following', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -599,7 +614,7 @@ app.get('/api/user/:username/following', async (req, res) => {
 // Search tweets
 app.get('/api/tweets/search', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -667,7 +682,7 @@ app.get('/api/tweets/search', async (req, res) => {
 // Get tweet details by ID
 app.get('/api/tweet/:tweetId', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -719,7 +734,7 @@ app.get('/api/tweet/:tweetId', async (req, res) => {
 // DEBUG: Get full tweet data for a user (logs everything)
 app.get('/api/debug/tweets/:username', async (req, res) => {
     try {
-        const headers = getAuthHeaders();
+        const headers = getAuthHeaders(req);
         if (!headers) {
             return res.status(401).json({ error: 'Not authenticated' });
         }
@@ -900,6 +915,413 @@ app.get('/api/debug/tweets/:username', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================================
+// AUTHENTICATION ENDPOINTS
+// ============================================================================
+
+// Auth status tracking
+let authInProgress = false;
+let authBrowserContext = null;
+
+// Dynamic import for playwright (only when needed)
+let chromium = null;
+async function getPlaywright() {
+    if (!chromium) {
+        const playwright = await import('playwright');
+        chromium = playwright.chromium;
+    }
+    return chromium;
+}
+
+// Read saved session info
+function getSavedSession() {
+    try {
+        const sessionPath = path.join(__dirname, '.session.json');
+        if (fs.existsSync(sessionPath)) {
+            return JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+        }
+    } catch (e) {}
+    return null;
+}
+
+// Save session info
+function saveSession(userInfo) {
+    try {
+        const sessionPath = path.join(__dirname, '.session.json');
+        fs.writeFileSync(sessionPath, JSON.stringify(userInfo, null, 2));
+    } catch (e) {
+        console.error('Failed to save session:', e.message);
+    }
+}
+
+// Clear session
+function clearSession() {
+    try {
+        const sessionPath = path.join(__dirname, '.session.json');
+        if (fs.existsSync(sessionPath)) {
+            fs.unlinkSync(sessionPath);
+        }
+    } catch (e) {}
+}
+
+// Check current auth status
+app.get('/api/auth/status', async (req, res) => {
+    const apiKey = process.env.RETTIWT_API_KEY || '';
+    const hasValidAuth = apiKey && !(/^\d+$/.test(apiKey)) && apiKey.includes(';');
+    
+    if (!hasValidAuth) {
+        return res.json({
+            authenticated: false,
+            auth_in_progress: authInProgress,
+            message: 'No valid session found'
+        });
+    }
+    
+    // Check saved session first
+    const savedSession = getSavedSession();
+    if (savedSession && savedSession.username) {
+        // Verify session is still valid by making a simple API call
+        try {
+            const headers = getAuthHeaders(req);
+            if (headers) {
+                // Try to fetch user info for the saved username
+                const userVars = { screen_name: savedSession.username, withSafetyModeUserFields: true };
+                const userUrl = `https://x.com/i/api/graphql/xmU6X_CKVnQ5lSrCbAmJsg/UserByScreenName?variables=${encodeURIComponent(JSON.stringify(userVars))}&features=${encodeURIComponent(JSON.stringify(FEATURES))}`;
+                
+                const userResponse = await fetch(userUrl, { headers });
+                const userData = await userResponse.json();
+                
+                const user = userData?.data?.user?.result;
+                
+                if (user) {
+                    const legacy = user.legacy || {};
+                    return res.json({
+                        authenticated: true,
+                        user: {
+                            id: user.rest_id,
+                            username: legacy.screen_name,
+                            name: legacy.name,
+                            profile_image_url: legacy.profile_image_url_https?.replace('_normal', '_400x400'),
+                            description: legacy.description,
+                            verified: user.is_blue_verified || false,
+                            followers_count: legacy.followers_count,
+                            following_count: legacy.friends_count,
+                            tweet_count: legacy.statuses_count,
+                            created_at: legacy.created_at
+                        },
+                        cookies: apiKey  // Include cookies for Streamlit to use
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Session validation failed:', error.message);
+        }
+    }
+    
+    // If no saved session, we have cookies but don't know the user
+    // Return authenticated with limited info
+    return res.json({ 
+        authenticated: true,
+        user: savedSession || null,
+        message: savedSession ? 'Session valid' : 'Authenticated but user info not available. Please re-login.'
+    });
+});
+
+// Start authentication (opens Playwright browser)
+app.post('/api/auth/start', async (req, res) => {
+    if (authInProgress) {
+        return res.status(409).json({ 
+            error: 'Authentication already in progress',
+            message: 'Please complete the login in the browser window'
+        });
+    }
+    
+    authInProgress = true;
+    
+    try {
+        console.log('\n🔐 Starting Playwright authentication...');
+        
+        const userDataDir = path.join(__dirname, '.playwright-profile');
+        const playwright = await getPlaywright();
+        
+        authBrowserContext = await playwright.launchPersistentContext(userDataDir, {
+            headless: false,
+            viewport: { width: 1280, height: 800 },
+            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            args: ['--disable-blink-features=AutomationControlled']
+        });
+        
+        const page = authBrowserContext.pages()[0] || await authBrowserContext.newPage();
+        
+        // Navigate to Twitter login
+        console.log('🌐 Opening Twitter login page...');
+        await page.goto('https://x.com/i/flow/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        
+        res.json({
+            success: true,
+            message: 'Browser opened. Please log in to Twitter.',
+            instructions: [
+                '1. Log in with your Twitter credentials in the browser window',
+                '2. Complete 2FA if required',
+                '3. Once you see your feed, call POST /api/auth/complete'
+            ]
+        });
+        
+    } catch (error) {
+        authInProgress = false;
+        console.error('Auth start failed:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Complete authentication (capture cookies and get user info)
+app.post('/api/auth/complete', async (req, res) => {
+    if (!authInProgress || !authBrowserContext) {
+        return res.status(400).json({ 
+            error: 'No authentication in progress',
+            message: 'Call POST /api/auth/start first'
+        });
+    }
+    
+    try {
+        console.log('🔄 Completing authentication...');
+        
+        const page = authBrowserContext.pages()[0];
+        
+        // Navigate to home to ensure cookies are set
+        await page.goto('https://x.com/home', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(3000);
+        
+        // Get all cookies
+        const cookies = await authBrowserContext.cookies();
+        
+        const authToken = cookies.find(c => c.name === 'auth_token');
+        const ct0 = cookies.find(c => c.name === 'ct0');
+        
+        if (!authToken || !ct0) {
+            return res.status(401).json({
+                error: 'Login not completed',
+                message: 'Please log in to Twitter in the browser window first',
+                found_cookies: cookies.map(c => c.name)
+            });
+        }
+        
+        // Update .env with new API key
+        const apiKey = `${authToken.value};${ct0.value}`;
+        
+        const envPath = path.join(__dirname, '..', '.env');
+        
+        let envContent = '';
+        if (fs.existsSync(envPath)) {
+            envContent = fs.readFileSync(envPath, 'utf8');
+        }
+        
+        if (envContent.includes('RETTIWT_API_KEY=')) {
+            envContent = envContent.replace(/RETTIWT_API_KEY=.*/, `RETTIWT_API_KEY=${apiKey}`);
+        } else {
+            envContent += `\nRETTIWT_API_KEY=${apiKey}\n`;
+        }
+        
+        fs.writeFileSync(envPath, envContent);
+        
+        // Update process.env immediately
+        process.env.RETTIWT_API_KEY = apiKey;
+        
+        console.log('✅ Cookies saved to .env');
+        
+        // Get current user info using new cookies
+        // Build headers directly with the new cookies
+        const headers = {
+            'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+            'cookie': `auth_token=${authToken.value}; ct0=${ct0.value}`,
+            'x-csrf-token': ct0.value,
+            'x-twitter-auth-type': 'OAuth2Session',
+            'x-twitter-active-user': 'yes',
+            'content-type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        };
+        let userInfo = null;
+        
+        // Use Viewer GraphQL endpoint to get current user info
+        try {
+            const viewerUrl = 'https://x.com/i/api/graphql/2A6VqXzLLCfPplvYlmYGpQ/Viewer?variables=%7B%22withCommunitiesMemberships%22%3Atrue%7D&features=%7B%22creator_subscriptions_tweet_preview_api_enabled%22%3Atrue%7D';
+            const viewerResponse = await fetch(viewerUrl, { headers });
+            
+            if (viewerResponse.status === 200) {
+                const viewerData = await viewerResponse.json();
+                const viewer = viewerData?.data?.viewer?.user_results?.result;
+                
+                if (viewer) {
+                    const legacy = viewer.legacy || {};
+                    userInfo = {
+                        id: viewer.rest_id,
+                        username: legacy.screen_name,
+                        name: legacy.name,
+                        profile_image_url: legacy.profile_image_url_https?.replace('_normal', '_400x400'),
+                        description: legacy.description,
+                        verified: viewer.is_blue_verified || false,
+                        followers_count: legacy.followers_count,
+                        following_count: legacy.friends_count,
+                        tweet_count: legacy.statuses_count,
+                        created_at: legacy.created_at
+                    };
+                    console.log(`✅ Logged in as @${userInfo.username}`);
+                    
+                    // Save session to file for persistence
+                    saveSession(userInfo);
+                }
+            } else {
+                console.log(`⚠️ Viewer endpoint returned status ${viewerResponse.status}`);
+                // Try to get username from profile link in the page
+                const page = authBrowserContext.pages()[0];
+                if (page) {
+                    try {
+                        await page.goto('https://x.com/home', { waitUntil: 'domcontentloaded', timeout: 30000 });
+                        await page.waitForTimeout(3000);
+                        
+                        // Look for the profile link which contains the username
+                        const profileLink = await page.evaluate(() => {
+                            // Find profile link in sidebar
+                            const links = document.querySelectorAll('a[href^="/"]');
+                            for (const link of links) {
+                                const href = link.getAttribute('href');
+                                // Profile link is usually just /username
+                                if (href && href.match(/^\/[a-zA-Z0-9_]+$/) && !href.includes('/home') && !href.includes('/explore') && !href.includes('/notifications') && !href.includes('/messages') && !href.includes('/i/')) {
+                                    // Check if it looks like a profile link (has profile image nearby)
+                                    const img = link.querySelector('img');
+                                    if (img && img.src && img.src.includes('profile_images')) {
+                                        return href.substring(1); // Remove leading /
+                                    }
+                                }
+                            }
+                            // Alternative: look for aria-label="Profile"
+                            const profileBtn = document.querySelector('a[aria-label="Profile"]');
+                            if (profileBtn) {
+                                const href = profileBtn.getAttribute('href');
+                                if (href) return href.substring(1);
+                            }
+                            return null;
+                        });
+                        
+                        if (profileLink) {
+                            console.log(`📍 Found username from page: @${profileLink}`);
+                            
+                            // Fetch user info using the username
+                            const userVars = { screen_name: profileLink, withSafetyModeUserFields: true };
+                            const userUrl = `https://x.com/i/api/graphql/xmU6X_CKVnQ5lSrCbAmJsg/UserByScreenName?variables=${encodeURIComponent(JSON.stringify(userVars))}&features=${encodeURIComponent(JSON.stringify(FEATURES))}`;
+                            
+                            const userResponse = await fetch(userUrl, { headers });
+                            if (userResponse.status === 200) {
+                                const userData = await userResponse.json();
+                                const user = userData?.data?.user?.result;
+                                
+                                if (user) {
+                                    const legacy = user.legacy || {};
+                                    userInfo = {
+                                        id: user.rest_id,
+                                        username: legacy.screen_name,
+                                        name: legacy.name,
+                                        profile_image_url: legacy.profile_image_url_https?.replace('_normal', '_400x400'),
+                                        description: legacy.description,
+                                        verified: user.is_blue_verified || false,
+                                        followers_count: legacy.followers_count,
+                                        following_count: legacy.friends_count,
+                                        tweet_count: legacy.statuses_count,
+                                        created_at: legacy.created_at
+                                    };
+                                    console.log(`✅ Logged in as @${userInfo.username}`);
+                                    saveSession(userInfo);
+                                }
+                            }
+                        } else {
+                            console.log('⚠️ Could not find username in page');
+                        }
+                    } catch (pageError) {
+                        console.error('Error extracting username from page:', pageError.message);
+                    }
+                }
+            }
+        } catch (viewerError) {
+            console.error('Error fetching viewer info:', viewerError.message);
+        }
+        
+        // Close browser
+        await authBrowserContext.close();
+        authBrowserContext = null;
+        authInProgress = false;
+        
+        res.json({
+            success: true,
+            message: 'Authentication completed successfully',
+            user: userInfo,
+            // Full cookies for storing in DB (per-user)
+            cookies: apiKey,
+            session: {
+                auth_token: authToken.value.substring(0, 10) + '...',
+                ct0: ct0.value.substring(0, 10) + '...',
+                expires: authToken.expires
+            }
+        });
+        
+    } catch (error) {
+        console.error('Auth complete failed:', error.message);
+        
+        // Clean up
+        if (authBrowserContext) {
+            await authBrowserContext.close().catch(() => {});
+            authBrowserContext = null;
+        }
+        authInProgress = false;
+        
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Cancel authentication
+app.post('/api/auth/cancel', async (req, res) => {
+    if (authBrowserContext) {
+        await authBrowserContext.close().catch(() => {});
+        authBrowserContext = null;
+    }
+    authInProgress = false;
+    
+    res.json({ success: true, message: 'Authentication cancelled' });
+});
+
+// Logout (clear session)
+app.post('/api/auth/logout', async (req, res) => {
+    try {
+        // Clear cookies from .env
+        const envPath = path.join(__dirname, '..', '.env');
+        
+        if (fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, 'utf8');
+            envContent = envContent.replace(/RETTIWT_API_KEY=.*\n?/, '');
+            fs.writeFileSync(envPath, envContent);
+        }
+        
+        // Clear from process
+        delete process.env.RETTIWT_API_KEY;
+        
+        // Clear session file
+        clearSession();
+        
+        // Clear Playwright profile
+        const profilePath = path.join(__dirname, '.playwright-profile');
+        
+        try {
+            fs.rmSync(profilePath, { recursive: true, force: true });
+        } catch (e) {
+            // Profile might not exist
+        }
+        
+        res.json({ success: true, message: 'Logged out successfully' });
+        
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });

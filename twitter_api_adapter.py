@@ -242,17 +242,23 @@ class OfficialTwitterAPI(TwitterAPIBase):
 class RettiwtAPI(TwitterAPIBase):
     """Rettiwt-API implementation (free alternative)"""
     
-    def __init__(self, username: str = None, service_url: str = None):
+    def __init__(self, username: str = None, service_url: str = None, cookies: str = None):
         self.username = username  # The logged-in user's username
         self.service_url = service_url or os.getenv('RETTIWT_SERVICE_URL', 'http://localhost:3001')
+        self.cookies = cookies  # User's auth cookies (auth_token;ct0 format)
         self._user_cache = {}
     
     def _make_request(self, endpoint: str, params: Dict = None, timeout: int = 30) -> Optional[Dict]:
         """Make a request to the Rettiwt service"""
         url = f"{self.service_url}{endpoint}"
         
+        # Build headers with user's cookies if available
+        headers = {}
+        if self.cookies:
+            headers['X-Rettiwt-Cookies'] = self.cookies
+        
         try:
-            response = requests.get(url, params=params, timeout=timeout)
+            response = requests.get(url, params=params, headers=headers, timeout=timeout)
             
             if response.status_code == 200:
                 return response.json()
@@ -390,7 +396,7 @@ class RettiwtAPI(TwitterAPIBase):
         return None
 
 
-def get_twitter_api(access_token: str = None, refresh_token: str = None, username: str = None) -> TwitterAPIBase:
+def get_twitter_api(access_token: str = None, refresh_token: str = None, username: str = None, cookies: str = None) -> TwitterAPIBase:
     """
     Factory function to get the appropriate Twitter API implementation
     
@@ -402,6 +408,7 @@ def get_twitter_api(access_token: str = None, refresh_token: str = None, usernam
         access_token: OAuth access token (for official API)
         refresh_token: OAuth refresh token (for official API)
         username: Twitter username (for Rettiwt API)
+        cookies: User's Rettiwt cookies (for multi-user support)
     
     Returns:
         TwitterAPIBase implementation
@@ -413,7 +420,7 @@ def get_twitter_api(access_token: str = None, refresh_token: str = None, usernam
             raise ValueError("Access token required for official Twitter API")
         return OfficialTwitterAPI(access_token, refresh_token)
     else:
-        return RettiwtAPI(username=username)
+        return RettiwtAPI(username=username, cookies=cookies)
 
 
 def get_api_mode() -> str:

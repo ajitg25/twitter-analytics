@@ -16,10 +16,11 @@ from twitter_api_adapter import get_twitter_api, get_api_mode, TwitterAPIBase
 class TwitterLiveAPI:
     """Fetch live Twitter data using OAuth 2.0 access token or Rettiwt-API"""
     
-    def __init__(self, access_token=None, refresh_token=None, username=None):
+    def __init__(self, access_token=None, refresh_token=None, username=None, cookies=None):
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.username = username
+        self.cookies = cookies  # User's Rettiwt cookies for multi-user support
         self.base_url = "https://api.twitter.com/2"
         self.headers = {
             'Authorization': f'Bearer {access_token}'
@@ -33,7 +34,8 @@ class TwitterLiveAPI:
         self._api: TwitterAPIBase = get_twitter_api(
             access_token=access_token,
             refresh_token=refresh_token,
-            username=username
+            username=username,
+            cookies=cookies
         )
 
     def _refresh_token(self):
@@ -441,7 +443,9 @@ def display_live_metrics(user_info):
         st.warning("⚠️ Username required for Rettiwt API mode.")
         return
     
-    api = TwitterLiveAPI(access_token=access_token, username=username)
+    # Get cookies from session for multi-user Rettiwt support
+    cookies = st.session_state.get('rettiwt_cookies')
+    api = TwitterLiveAPI(access_token=access_token, username=username, cookies=cookies)
     
     # Show current API mode
     api_mode = get_api_mode()

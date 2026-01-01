@@ -250,6 +250,10 @@ class Database:
                 'updated_at': datetime.now()
             }
             
+            # Add Rettiwt cookies if present
+            if user_info.get('rettiwt_cookies'):
+                user_data['rettiwt_cookies'] = user_info.get('rettiwt_cookies')
+            
             # Upsert user (update if exists, insert if not)
             result = self.db.users.update_one(
                 {'twitter_id': user_info.get('id')},
@@ -266,6 +270,41 @@ class Database:
             
         except Exception as e:
             st.error(f"Error creating/updating user: {e}")
+            return None
+    
+    def save_user_cookies(self, twitter_id, cookies):
+        """Save Rettiwt cookies for a user"""
+        if not self.connected:
+            return False
+        
+        try:
+            result = self.db.users.update_one(
+                {'twitter_id': twitter_id},
+                {
+                    '$set': {
+                        'rettiwt_cookies': cookies,
+                        'cookies_updated_at': datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error saving cookies: {e}")
+            return False
+    
+    def get_user_cookies(self, twitter_id):
+        """Get Rettiwt cookies for a user"""
+        if not self.connected:
+            return None
+        
+        try:
+            user = self.db.users.find_one(
+                {'twitter_id': twitter_id},
+                {'rettiwt_cookies': 1}
+            )
+            return user.get('rettiwt_cookies') if user else None
+        except Exception as e:
+            print(f"Error getting cookies: {e}")
             return None
     
     def get_user_by_twitter_id(self, twitter_id):
