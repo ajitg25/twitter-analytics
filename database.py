@@ -14,7 +14,17 @@ except:
     pass
 
 # MongoDB Configuration
-MONGODB_URI = os.getenv('MONGODB_URI', st.secrets.get('MONGODB_URI', ''))
+def _get_mongodb_uri():
+    """Get MongoDB URI from environment or Streamlit secrets"""
+    uri = os.getenv('MONGODB_URI', '')
+    if not uri:
+        try:
+            uri = st.secrets.get('MONGODB_URI', '')
+        except:
+            pass
+    return uri
+
+MONGODB_URI = _get_mongodb_uri()
 DATABASE_NAME = os.getenv('DATABASE_NAME', 'twitter_analytics')
 
 
@@ -138,7 +148,8 @@ class Database:
 
     def save_live_tweets(self, user_id, tweets_data):
         """
-        Incrementally save/update tweets from Live API.
+        Save NEW tweets from Live API (skip existing ones).
+        Only inserts tweets that don't already exist in DB.
         Maps Live API format to internal DB schema.
         """
         if not self.connected or not tweets_data:
@@ -167,24 +178,26 @@ class Database:
                     'bookmark_count': metrics.get('bookmark_count', 0),
                     'impression_count': metrics.get('impression_count', 0),
                     'is_start_reply': t.get('text', '').startswith('@'), # Approximation
-                    'updated_at': datetime.now()
+                    'inserted_at': datetime.now()
                 }
                 
-                # Upsert based on tweet_id AND user_id
+                # Use $setOnInsert - only sets values when inserting NEW documents
+                # If tweet already exists, this operation does nothing
                 op = UpdateOne(
                     {'user_id': user_id, 'tweet_id': t.get('id')},
-                    {'$set': tweet_doc},
+                    {'$setOnInsert': tweet_doc},
                     upsert=True
                 )
                 operations.append(op)
             
             if operations:
                 result = self.db.tweets.bulk_write(operations, ordered=False)
-                return result.upserted_count + result.modified_count
+                # Only count newly inserted tweets (not matched/modified)
+                return result.upserted_count
             return 0
             
         except Exception as e:
-            st.warning(f"⚠️ Error saving tweets incrementally: {e}")
+            st.warning(f"⚠️ Error saving tweets: {e}")
             return 0
 
     def get_saved_tweets(self, user_id, limit=100):
@@ -464,55 +477,10 @@ class Database:
             return None
 
     # === INCREMENTAL LIVE DATA SAVING ===
-    def save_live_tweets(self, user_id, tweets_data):
-        """
-        Incrementally save/update tweets from Live API.
-        Maps Live API format to internal DB schema.
-        """
-        if not self.connected or not tweets_data:
-            return 0
-        
-        from pymongo import UpdateOne
-        
-        try:
-            operations = []
-            for t in tweets_data:
-                # Map Live API fields to DB Schema (compatible with Archive)
-                # Live: id, text, created_at, public_metrics
-                
-                metrics = t.get('public_metrics', {})
-                created_at = self._parse_twitter_date(t.get('created_at'))
-                
-                tweet_doc = {
-                    'user_id': user_id,
-                    'tweet_id': t.get('id'),
-                    'created_at': created_at,
-                    'full_text': t.get('text'),
-                    'favorite_count': metrics.get('like_count', 0),
-                    'retweet_count': metrics.get('retweet_count', 0),
-                    'reply_count': metrics.get('reply_count', 0),
-                    'quote_count': metrics.get('quote_count', 0),
-                    'impression_count': metrics.get('impression_count', 0),
-                    'is_start_reply': t.get('text', '').startswith('@'), # Approximation
-                    'updated_at': datetime.now()
-                }
-                
-                # Upsert based on tweet_id AND user_id
-                op = UpdateOne(
-                    {'user_id': user_id, 'tweet_id': t.get('id')},
-                    {'$set': tweet_doc},
-                    upsert=True
-                )
-                operations.append(op)
-            
-            if operations:
-                result = self.db.tweets.bulk_write(operations, ordered=False)
-                return result.upserted_count + result.modified_count
-            return 0
-            
-        except Exception as e:
-            st.warning(f"⚠️ Error saving tweets incrementally: {e}")
-            return 0
+    # Note: save_live_tweets is defined above - this is a duplicate that should be removed
+    # Keeping as alias for backwards compatibility
+    # def save_live_tweets(self, user_id, tweets_data):
+    #     See the method defined earlier in this class
 
     def get_saved_tweets(self, user_id, limit=100):
         """Get latest tweets from DB"""

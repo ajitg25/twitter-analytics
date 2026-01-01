@@ -1,28 +1,44 @@
-"""Twitter Live API - Fetch real-time data using OAuth access token"""
+"""Twitter Live API - Fetch real-time data using OAuth access token or Rettiwt-API
+
+Supports two modes controlled by TWITTER_OFFICIAL environment variable:
+- TWITTER_OFFICIAL=true  -> Use official Twitter API (paid, requires OAuth)
+- TWITTER_OFFICIAL=false -> Use Rettiwt-API (free, requires rettiwt-service running)
+"""
 
 import requests
 import os
 from datetime import datetime, timedelta
 import streamlit as st
 from database import get_database
+from twitter_api_adapter import get_twitter_api, get_api_mode, TwitterAPIBase
 
 
 class TwitterLiveAPI:
-    """Fetch live Twitter data using OAuth 2.0 access token"""
+    """Fetch live Twitter data using OAuth 2.0 access token or Rettiwt-API"""
     
-    def __init__(self, access_token, refresh_token=None):
+    def __init__(self, access_token=None, refresh_token=None, username=None):
         self.access_token = access_token
         self.refresh_token = refresh_token
+        self.username = username
         self.base_url = "https://api.twitter.com/2"
         self.headers = {
             'Authorization': f'Bearer {access_token}'
-        }
+        } if access_token else {}
+        
         # Check environment
         self.env = os.getenv('APP_ENV', 'production').lower()
+        self.use_official_api = os.getenv('TWITTER_OFFICIAL', 'false').lower() == 'true'
+        
+        # Initialize the appropriate API adapter
+        self._api: TwitterAPIBase = get_twitter_api(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            username=username
+        )
 
     def _refresh_token(self):
-        """Internal helper to refresh the access token"""
-        if not self.refresh_token:
+        """Internal helper to refresh the access token (Official API only)"""
+        if not self.refresh_token or not self.use_official_api:
             return False
             
         try:
@@ -63,33 +79,16 @@ class TwitterLiveAPI:
         if self.env == 'development':
             return "1234567890"
 
-        # 3. Last Resort: hit API
-        url = f"{self.base_url}/users/me"
-        params = {'user.fields': 'id,username,name'}
-        
+        # 3. Use the API adapter to get user info
         try:
-            response = requests.get(url, headers=self.headers, params=params)
+            user_info = self._api.get_my_user_info()
             
-            # Handle expired token (401)
-            if response.status_code == 401:
-                if self._refresh_token():
-                    # Retry once with new token
-                    response = requests.get(url, headers=self.headers, params=params)
-                else:
-                    st.error("🔑 Session expired. Please log in again.")
-                    return None
-
-            if response.status_code == 200:
-                user_id = response.json().get('data', {}).get('id')
+            if user_info:
+                user_id = user_info.get('id')
                 if user_id:
                     st.session_state.live_user_id_cache = user_id
                 return user_id
-            elif response.status_code == 429:
-                st.error("🔑 Rate limit reached for User Identity. Try again in 15 mins.")
-                return None
-            else:
-                st.error(f"Failed to get user ID: {response.text}")
-                return None
+            return None
         except Exception as e:
             st.error(f"Error getting user ID: {e}")
             return None
@@ -160,53 +159,13 @@ class TwitterLiveAPI:
             if age < 15:
                 cached = db.get_saved_tweets(user_id, limit=3200) 
                 if cached:
-                    st.caption(f"💾 Using database data (Checked {int(age)}m ago)")
+                    api_mode = get_api_mode()
+                    st.caption(f"💾 Using database data (Checked {int(age)}m ago) | Mode: {api_mode}")
                     return cached
 
-        url = f"{self.base_url}/users/{user_id}/tweets"
-        params = {
-            'max_results': 100,
-            'start_time': start_time_str,
-            'tweet.fields': 'created_at,public_metrics,text,author_id',
-            'expansions': 'author_id',
-            'user.fields': 'username,name,profile_image_url'
-        }
-        
-        all_tweets = []
-        next_token = None
-        pages_fetched = 0
-        max_pages = 32 # Fetch up to 3,200 tweets (Twitter's max timeline depth)
-        
+        # Use the API adapter to fetch tweets
         try:
-            while pages_fetched < max_pages:
-                if next_token:
-                    params['pagination_token'] = next_token
-                
-                response = requests.get(url, headers=self.headers, params=params)
-                
-                # Handle expired token (401)
-                if response.status_code == 401:
-                    if self._refresh_token():
-                        response = requests.get(url, headers=self.headers, params=params)
-                    else:
-                        break
-
-                if response.status_code == 200:
-                    data = response.json()
-                    page_tweets = data.get('data', [])
-                    if page_tweets:
-                        all_tweets.extend(page_tweets)
-                    
-                    next_token = data.get('meta', {}).get('next_token')
-                    pages_fetched += 1
-                    
-                    if not next_token:
-                        break
-                elif response.status_code == 429:
-                    st.warning("⚠️ Rate limit reached during sync. Showing partial data.")
-                    break
-                else:
-                    break
+            all_tweets = self._api.get_recent_tweets(user_id, max_results=max_results)
 
             if all_tweets:
                 # 1. Save to Database
@@ -217,30 +176,29 @@ class TwitterLiveAPI:
                 # Use all_tweets for the rest of progress
                 tweets = all_tweets
                 
-                # 2. Export to Local CSV for Manual Analysis
+                # 2. Export to Local CSV for Manual Analysis (development only)
                 try:
                     import pandas as pd
                     from pathlib import Path
                     
-                    # Create exports directory if it doesn't exist
-                    export_dir = Path("exports")
-                    export_dir.mkdir(exist_ok=True)
-                    
-                    # Flatten metrics for CSV compatibility
-                    flat_tweets = []
-                    for t in tweets:
-                        item = t.copy()
-                        metrics = item.pop('public_metrics', {})
-                        for k, v in metrics.items():
-                            item[f'metric_{k}'] = v
-                        flat_tweets.append(item)
+                    if self.env == "development":
+                        export_dir = Path("exports")
+                        export_dir.mkdir(exist_ok=True)
                         
-                    df = pd.DataFrame(flat_tweets)
-                    if APP_ENV=="development":
+                        # Flatten metrics for CSV compatibility
+                        flat_tweets = []
+                        for t in tweets:
+                            item = t.copy()
+                            metrics = item.pop('public_metrics', {})
+                            for k, v in metrics.items():
+                                item[f'metric_{k}'] = v
+                            flat_tweets.append(item)
+                            
+                        df = pd.DataFrame(flat_tweets)
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         filename = export_dir / f"tweets_export_{user_id}_{timestamp}.csv"
                         df.to_csv(filename, index=False)
-                    st.sidebar.info(f"📁 Local CSV Exported: {filename.name}")
+                        st.sidebar.info(f"📁 Local CSV Exported: {filename.name}")
                 except Exception as export_error:
                     print(f"CSV Export Exception: {export_error}")
 
@@ -372,52 +330,31 @@ class TwitterLiveAPI:
                     st.caption(f"👥 Using database followers (Checked {int(age)}m ago)")
                     return {'data': cached, 'meta': {'result_count': len(cached)}}
 
-        url = f"{self.base_url}/users/{user_id}/followers"
-        
-        params = {
-            'max_results': min(max_results, 1000),
-            'user.fields': 'created_at,description,profile_image_url,public_metrics,verified'
-        }
-        
-        if pagination_token:
-            params['pagination_token'] = pagination_token
-            
+        # Use the API adapter to fetch followers
         try:
-            response = requests.get(url, headers=self.headers, params=params)
+            result = self._api.get_followers(user_id, max_results=max_results)
             
-            # Handle expired token (401)
-            if response.status_code == 401:
-                if self._refresh_token():
-                    # Retry once with new token
-                    response = requests.get(url, headers=self.headers, params=params)
-                else:
-                    return db.get_saved_connections(user_id, 'followers') if db.is_connected() else None
-
-            if response.status_code == 200:
-                json_res = response.json()
-                # Save Incremental
-                if db.is_connected() and 'data' in json_res and not pagination_token:
-                    db.save_live_connections(user_id, json_res['data'], 'followers')
-                    # Update metadata for cache-age tracking
-                    db.save_live_api_response(user_id, 'followers', {'count': len(json_res['data'])})
-                return json_res
-            elif response.status_code == 429:
-                st.warning("⚠️ Rate limit reached for followers. Checking history...")
-                if db.is_connected():
-                    cached = db.get_saved_connections(user_id, 'followers')
-                    if cached:
-                         st.info(f"📦 Loaded {len(cached)} followers from database.")
-                         return {'data': cached, 'meta': {'result_count': len(cached)}}
-                return None
-            else:
-                st.error(f"Failed to fetch followers: {response.text}")
-                return db.get_saved_connections(user_id, 'followers') if db.is_connected() else None
+            if result and 'data' in result:
+                # Save to database
+                if db.is_connected() and not pagination_token:
+                    db.save_live_connections(user_id, result['data'], 'followers')
+                    db.save_live_api_response(user_id, 'followers', {'count': len(result['data'])})
+                return result
+            
+            # Fallback to database
+            if db.is_connected():
+                cached = db.get_saved_connections(user_id, 'followers')
+                if cached:
+                    st.info(f"📦 Loaded {len(cached)} followers from database.")
+                    return {'data': cached, 'meta': {'result_count': len(cached)}}
+            return None
+            
         except Exception as e:
             st.error(f"Error fetching followers: {e}")
             if db.is_connected():
                 cached = db.get_saved_connections(user_id, 'followers')
                 if cached:
-                        return {'data': cached, 'meta': {'result_count': len(cached)}}
+                    return {'data': cached, 'meta': {'result_count': len(cached)}}
             return None
 
     def get_following(self, user_id, max_results=100, pagination_token=None, force_refresh=False):
@@ -455,52 +392,31 @@ class TwitterLiveAPI:
                     st.caption(f"👥 Using database following (Checked {int(age)}m ago)")
                     return {'data': cached, 'meta': {'result_count': len(cached)}}
 
-        url = f"{self.base_url}/users/{user_id}/following"
-        
-        params = {
-            'max_results': min(max_results, 1000),
-            'user.fields': 'created_at,description,profile_image_url,public_metrics,verified'
-        }
-        
-        if pagination_token:
-            params['pagination_token'] = pagination_token
-            
+        # Use the API adapter to fetch following
         try:
-            response = requests.get(url, headers=self.headers, params=params)
+            result = self._api.get_following(user_id, max_results=max_results)
             
-            # Handle expired token (401)
-            if response.status_code == 401:
-                if self._refresh_token():
-                    # Retry once with new token
-                    response = requests.get(url, headers=self.headers, params=params)
-                else:
-                    return db.get_saved_connections(user_id, 'following') if db.is_connected() else None
-
-            if response.status_code == 200:
-                json_res = response.json()
-                # Save Incremental
-                if db.is_connected() and 'data' in json_res and not pagination_token:
-                    db.save_live_connections(user_id, json_res['data'], 'following')
-                    # Update metadata for cache-age tracking
-                    db.save_live_api_response(user_id, 'following', {'count': len(json_res['data'])})
-                return json_res
-            elif response.status_code == 429:
-                st.warning("⚠️ Rate limit reached for following. Checking history...")
-                if db.is_connected():
-                    cached = db.get_saved_connections(user_id, 'following')
-                    if cached:
-                         st.info(f"📦 Loaded {len(cached)} following from database.")
-                         return {'data': cached, 'meta': {'result_count': len(cached)}}
-                return None
-            else:
-                st.error(f"Failed to fetch following: {response.text}")
-                return db.get_saved_connections(user_id, 'following') if db.is_connected() else None
+            if result and 'data' in result:
+                # Save to database
+                if db.is_connected() and not pagination_token:
+                    db.save_live_connections(user_id, result['data'], 'following')
+                    db.save_live_api_response(user_id, 'following', {'count': len(result['data'])})
+                return result
+            
+            # Fallback to database
+            if db.is_connected():
+                cached = db.get_saved_connections(user_id, 'following')
+                if cached:
+                    st.info(f"📦 Loaded {len(cached)} following from database.")
+                    return {'data': cached, 'meta': {'result_count': len(cached)}}
+            return None
+            
         except Exception as e:
             st.error(f"Error fetching following: {e}")
             if db.is_connected():
                 cached = db.get_saved_connections(user_id, 'following')
                 if cached:
-                        return {'data': cached, 'meta': {'result_count': len(cached)}}
+                    return {'data': cached, 'meta': {'result_count': len(cached)}}
             return None
 
 
@@ -509,15 +425,27 @@ def display_live_metrics(user_info):
     Display live metrics for authenticated user
     
     Args:
-        user_info: User information with access_token
+        user_info: User information with access_token and/or username
     """
     access_token = user_info.get('access_token')
+    username = user_info.get('username')
+    use_official = os.getenv('TWITTER_OFFICIAL', 'false').lower() == 'true'
     
-    if not access_token:
+    # For official API, we need access_token
+    # For Rettiwt API, we need username
+    if use_official and not access_token:
         st.warning("⚠️ No access token available. Please sign in again.")
         return
     
-    api = TwitterLiveAPI(access_token)
+    if not use_official and not username:
+        st.warning("⚠️ Username required for Rettiwt API mode.")
+        return
+    
+    api = TwitterLiveAPI(access_token=access_token, username=username)
+    
+    # Show current API mode
+    api_mode = get_api_mode()
+    st.sidebar.info(f"🔌 API Mode: {api_mode}")
     
     st.subheader("📊 Live Twitter Metrics")
     
