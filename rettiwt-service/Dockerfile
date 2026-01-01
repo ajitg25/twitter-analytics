@@ -1,41 +1,35 @@
-# Minimal Playwright Docker image for Render
+# Node.js with Playwright for Render
 FROM node:20-slim
 
-# Install dependencies for Chromium
+# Install Playwright system dependencies
 RUN apt-get update && apt-get install -y \
-    wget \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
     libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
     libxcomposite1 \
     libxdamage1 \
     libxfixes3 \
     libxrandr2 \
-    xdg-utils \
-    libxkbcommon0 \
-    libx11-xcb1 \
-    libxcb1 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first (better caching)
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm install --omit=dev
+# Install npm dependencies
+RUN npm install
 
-# Install Playwright and Chromium
+# Install Playwright Chromium browser
 RUN npx playwright install chromium
 
 # Copy application code
@@ -44,10 +38,6 @@ COPY . .
 # Expose port
 EXPOSE 3001
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
-
 # Start the server
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
 
