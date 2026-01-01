@@ -23,6 +23,15 @@ const PORT = process.env.RETTIWT_PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        authenticated: !!process.env.RETTIWT_API_KEY,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Parse cookies - supports per-request cookies via header OR fallback to .env
 function getAuthHeaders(req = null) {
     let apiKey = '';
@@ -1044,6 +1053,32 @@ app.post('/api/auth/start', async (req, res) => {
     
     try {
         console.log('\n🔐 Starting Playwright authentication...');
+        
+        // Clear old cookies/session for a fresh start
+        console.log('🧹 Clearing old session for fresh login...');
+        
+        // Clear from .env
+        const envPath = path.join(__dirname, '..', '.env');
+        if (fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, 'utf8');
+            envContent = envContent.replace(/RETTIWT_API_KEY=.*\n?/, '');
+            fs.writeFileSync(envPath, envContent);
+        }
+        
+        // Clear from process
+        delete process.env.RETTIWT_API_KEY;
+        
+        // Clear session file
+        clearSession();
+        
+        // Clear Playwright profile for completely fresh login
+        const profilePath = path.join(__dirname, '.playwright-profile');
+        try {
+            fs.rmSync(profilePath, { recursive: true, force: true });
+            console.log('✅ Old session cleared');
+        } catch (e) {
+            // Profile might not exist, that's fine
+        }
         
         const userDataDir = path.join(__dirname, '.playwright-profile');
         const playwright = await getPlaywright();
